@@ -1,79 +1,89 @@
 import torch
-from functions.cost import *
 
-def get_optimizer(model, cost_function: CostFunction):
-    """Returns an optimizer for the model and cost function.
+def get_optimizer(model, cost_function):
+    """Returns an optimizer for the model and cost function based on the configuration.
 
+    The model configuration should have:
+      - optimizer_type: either 'sgd' or 'adam'
+      - optimizer: a dict with keys:
+          - 'learning_rates_weights' (list of floats)
+          - 'learning_rates_biases' (list of floats)
+          - 'momentum' (float)
+          - 'weight_decay' (float)
+          
     Args:
-        model (Model): the model whose parameters we optimize
-        cost_function (CostFunction): the cost function whose parameters we optimize
+        model (Model): the model whose parameters are optimized.
+        cost_function (CostFunction): the cost function whose parameters are optimized.
 
     Returns:
-        Optimizer: the optimizer
+        Optimizer: the configured optimizer.
     """
     config = model.config
-    if config.optimizer == 'sgd':
+    if config.optimizer_type == 'sgd':
         return SGDOptimizer(model, cost_function)
-    elif config.optimizer == 'adam':
+    elif config.optimizer_type == 'adam':
         return AdamOptimizer(model, cost_function)
     else:
-        raise ValueError('Unknown optimizer: {}'.format(config.optimizer))
+        raise ValueError("Unknown optimizer: {}".format(config.optimizer_type))
 
 
-class SGDOptimizer(torch.optim.SGD):
+class BaseOptimizer:
+    """
+    Base class for optimizers that abstracts common configuration and parameter extraction.
 
-    def __init__(self, model, cost_function):
-        """Creates an instance of the SGD Optimizer.
-
-        Args:
-            energy_fn (SumSeparableFunction): the energy function whose parameters we optimize
-            cost_function (CostFunction): the cost function whose parameters we optimize
-            learning_rates (list of float): the list of learning rates for the energy parameters and cost parameters
-            momentum (float, optional): the momentum. Default: 0.0
-            weight_decay (float, optional): the weight decay. Default: 0.0
-        """
-        energy_fn = model.function
-        config = model.config
-        learning_rates = config.optimizer['learning_rates_weights'] + config.optimizer['learning_rates_biases']
-        momentum = config.optimizer["momentum"]
-        weight_decay = config.optimizer["weight_decay"]
-
-        self._learning_rates = learning_rates
-        self._momentum = momentum
-        self._weight_decay = weight_decay
-
-        params = energy_fn.params() + cost_function.params()
-        params = [{"params": param.state, "lr": lr} for param, lr in zip(params, learning_rates)]
-        torch.optim.SGD.__init__(self, params, lr=0.1, momentum=momentum, weight_decay=weight_decay)
-
-    def __str__(self):
-        return 'SGD -- initial learning rates = {}, momentum={}, weight_decay={}'.format(self._learning_rates, self._momentum, self._weight_decay)
-
-class AdamOptimizer(torch.optim.Adam):
-
-    def __init__(self, model, cost_function):
-        """Creates an instance of the Adam Optimizer.
-
-        Args:
-            energy_fn (SumSeparableFunction): the energy function whose parameters we optimize
-            cost_function (CostFunction): the cost function whose parameters we optimize
-            learning_rates (list of float): the list of learning rates for the energy parameters and cost parameters
-            momentum (float, optional): the momentum. Default: 0.0
-            weight_decay (float, optional): the weight decay. Default: 0.0
-        """
-        energy_fn = model._function()
-        config = model.config
-        learning_rates = config.learning_rates
-        momentum = config.momentum
-        weight_decay = config.weight_decay
-
-        self._learning_rates = learning_rates
-        self._momentum = momentum
-        self._weight_decay = weight_decay
-
-        params = energy_fn.params() + cost_function.params()
-        params = [{"params": param.state, "lr": lr} for param, lr in zip(params, learning_rates)]
-        torch.optim.Adam.__init__(self, params, lr=0.1, momentum=momentum, weight_decay=weight_decay)
+    This class:
+      - Extracts the learning rates, momentum, and weight decay from model.config.optimizer.
+      - Combines parameters from the energy function and cost function.
+      - Initializes the underlying torch optimizer with per-parameter learning rates.
+      
+    Args:
+        model (Model): the model, which contains the configuration.
+        cost_function (CostFunction): the cost function.
+        torch_optimizer_class (type): a torch.optim optimizer class (e.g. torch.optim.SGD).
+        energy_fn_getter (callable): a function that retrieves the energy function from the model.
+    """
+    def __init__(self, model, cost_function, torch_optimizer_class, energy_fn_getter):
+        self.config = model.config
+        optimizer_config = self.config.optimizer
+        
+        # Combine the learning rates for weights and biases.
+        self.learning_rates = optimizer_config['learning_rates_weights'] + optimizer_config['learning_rates_biases']
+        self.momentum = optimizer_config["momentum"]
+        self.weight_decay = optimizer_config["weight_decay"]
+        
+        # Get the energy function from the model.
+        self.energy_fn = energy_fn_getter(model)
+        
+        # Gather parameters from both the energy function and the cost function.
+        params = self.energy_fn.params() + cost_function.params()
+        params = [{"params": param.state, "lr": lr} for param, lr in zip(params, self.learning_rates)]
+        
+        # Initialize the underlying torch optimizer.
+        torch_optimizer_class.__init__(self, params, lr=0.1,
+                                       momentum=self.momentum,
+                                       weight_decay=self.weight_decay)
+        
+        # Store for printing.
+        self._learning_rates = self.learning_rates
+        self._momentum = self.momentum
+        self._weight_decay = self.weight_decay
 
     def __str__(self):
-        return 'Adam -- initial learning rates = {}, momentum={}, weight_decay={}'.format(self._learning_rates, self._momentum, self._weight_decay)
+        return "{} -- initial learning rates = {}, momentum = {}, weight_decay = {}".format(
+            self.__class__.__name__,
+            self._learning_rates,
+            self._momentum,
+            self._weight_decay
+        )
+
+
+class SGDOptimizer(BaseOptimizer, torch.optim.SGD):
+    def __init__(self, model, cost_function):
+        # For SGD, assume the energy function is accessible as model.function.
+        super().__init__(model, cost_function, torch.optim.SGD, lambda m: m.function)
+
+
+class AdamOptimizer(BaseOptimizer, torch.optim.Adam):
+    def __init__(self, model, cost_function):
+        # For Adam, assume the energy function is accessible as model._function().
+        super().__init__(model, cost_function, torch.optim.Adam, lambda m: m._function())
