@@ -24,6 +24,31 @@ import torch
 # =============================================================================
 # Layer Updaters: abstract base and concrete implementations
 # =============================================================================
+class ParamUpdater:
+    """
+    Abstract class to update the state of a parameter
+    
+    The param theta is updated in proprtion to the gradient of a function E
+    A central quantity used to determine the param's update is the gradient dE/dtheta
+
+    Methods
+    -------
+    grad():
+        Computes the gradient of the function wrt the param's state
+    """
+
+    def __init__(self, param, fn):
+        """Creates an instance of ParamUpdater
+
+        Args:
+            param (Parameter): the param
+            fn (Function): the function
+        """
+
+        self._param = param
+
+        self.grad = fn.grad_param_fn(param)  # this is a method, not an attribute
+        self.second_fn = fn.second_fn(param)  # this is a method, not an attribute
 
 class LayerUpdater(ABC):
     """
