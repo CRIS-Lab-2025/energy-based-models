@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import copy
 
+# TODO: SCRAP THIS 
+
 class Variable(ABC):
     """
     Abstract class for variables (layers and parameters).
