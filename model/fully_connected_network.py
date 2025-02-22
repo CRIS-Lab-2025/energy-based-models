@@ -1,4 +1,4 @@
-from model.network import Network
+from model._network import Network
 
 class FullyConnectedNetwork(Network):
     def __init__(self, config, layer_shapes):
