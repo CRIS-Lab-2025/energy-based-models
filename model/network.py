@@ -23,12 +23,18 @@ class Network(ABC):
     def biases(self):
         return self._biases
     
+    def create_edge(self, pre_index, post_index, weight=1):
+        """Create an edge initialized with the specified weight value.
+
+        Args:
+            pre_index (int): the index of the source neuron
+            post_index (int): the index of the recieving neuron
+            weight (int, optional): the initial value of this weight. Default=1
+        """
+        self._weights[pre_index][post_index] = weight
+    
     @abstractmethod
     def update(self):
-        pass
-
-    def get_energy(self):
-        # TODO
         pass
 
     def clamp(self, neurons_to_clamp):
