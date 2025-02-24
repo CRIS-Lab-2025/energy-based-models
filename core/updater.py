@@ -31,6 +31,8 @@ class FixedPointUpdater(Updater):
         self._update_order()
 
     def _update_order(self):
+        
+        # determine the order in which to update the nodes
         self.update_order = []
         if self.order = 'synchronous':
             self.update_order = self.network.free_layers
@@ -47,18 +49,22 @@ class FixedPointUpdater(Updater):
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
                 grad = self.energy_fn.node_gradient(S, W, B, node)
+
+                # add the cost gradient
                 if layer == self.cost_fn.layer and target is not None:
-                    # add the cost gradient
                     grad += nudging * self.cost_fn.node_gradient(S, target, node)
+
                 # pass through activation function
                 grad = self.network.activation_fn[layer](grad)
-                # update the node
+
+                # update the state
                 S[node] = grad
         return S
         
 
     def compute_equilibrium(self, S, W,B,target,nudging=0):
         
+        # iterate for a fixed number of steps to reach equilibrium
         for i in range(self.iterations):
             S = self.step(S,W,B,target,nudging)
 
