@@ -20,10 +20,11 @@ class Updater(ABC):
 
 class FixedPointUpdater(Updater):
 
-    def __init__(self, network, energy_fn, config):
+    def __init__(self, network, energy_fn, cost_fn, config):
         super().__init__()
         self.network = network
         self.energy_fn = energy_fn
+        self.cost = cost_fn
         self.config = config
         self.order = config.updater['order']
         self.iterations = config.updater['iterations']
@@ -41,21 +42,25 @@ class FixedPointUpdater(Updater):
         else:
             raise ValueError("Invalid update order")
 
-    def step(self, W, S, B):
+    def step(self, S, W, B, target=None, nudging=0):
         for layer in self.update_order:
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
-                grad = self.energy_fn.node_gradient(W, S, B, node)
+                grad = self.energy_fn.node_gradient(S, W, B, node)
+                if layer == self.cost_fn.layer and target is not None:
+                    # add the cost gradient
+                    grad += nudging * self.cost_fn.node_gradient(S, target, node)
+                # pass through activation function
+                grad = self.network.activation_fn[layer](grad)
                 # update the node
                 S[node] = grad
         return S
         
 
-    def compute_equilibrium(self,W,S,B):
+    def compute_equilibrium(self, S, W,B,target,nudging=0):
         
         for i in range(self.iterations):
-            S = self.step(W,S,B)
-
+            S = self.step(S,W,B,target,nudging)
 
         return S
 

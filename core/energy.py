@@ -39,7 +39,7 @@ class HopfieldEnergy(EnergyFunction):
         energy = -0.5 * torch.einsum('bi,ij,bj->b', S, W, S) - torch.einsum('bi,bi->b', S, bias)
         return energy
 
-    def full_gradient(self, weight, state, bias):
+    def full_gradient(self, state, weight, bias):
         """
         Computes the gradient of the energy function with respect to the entire state.
         
@@ -64,7 +64,7 @@ class HopfieldEnergy(EnergyFunction):
         grad = grad - (torch.matmul(state, weight) + torch.matmul(state, weight.t()))
         return grad
 
-    def node_gradient(self, weight, state, bias, node_index):
+    def node_gradient(self, state, weight, bias, node_index):
         """
         Computes the gradient of the energy function with respect to a single node.
         
