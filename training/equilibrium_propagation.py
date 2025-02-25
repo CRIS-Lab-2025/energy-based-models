@@ -7,11 +7,10 @@ from estimators.optimizer import *
 
 class EquilibriumProp():
 
-    def __init__(self, energy_fn: EnergyFunction, cost_fn: CostFunction, updater: Updater, optimizer: torch.optim.SGD, config):
+    def __init__(self, energy_fn: EnergyFunction, cost_fn: CostFunction, updater: Updater, config):
         self.energy_fn = energy_fn
         self.cost_fn = cost_fn
         self.updater = updater
-        self.optimizer = optimizer
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99) # TODO: is this ok?
         self._variant = config.propagation['variant']
         self._nudging = config.propagation['nudging']
@@ -58,7 +57,10 @@ class EquilibriumProp():
         """
 
         cost_grads = self._cost_fn._full_grad( S,target, mean=True)   # compute the direct gradient of C, if C explicitly depends on parameters
-        
+        # change the shape of the cost_grads to match the shape of the weights. But need to confirm if the cost_grads are to be added to all the weights.
+        cost_grads = cost_grads.view(W.shape)
+
+
         # First phase: compute the first equilibrium state of the layers
         first_S = self._updater.compute_equilibrium(W, S, B, target, self._first_nudging)
         
@@ -66,7 +68,23 @@ class EquilibriumProp():
         second_S = self._updater.compute_equilibrium(W, S, B, target, self._second_nudging)
 
         # Compute the parameter gradients with either the standard EquilibriumProp formula, or the alternative EquilibriumProp formula
-        param_grads = self._standard_param_grads(first_S, second_S, cost_grads, W, B)
+        weight_grads, bias_grads = self._standard_param_grads(first_S, second_S, cost_grads, W, B)
 
-        return param_grads + cost_grads
+        # Doesn't calculate grads for biases I think need to fix that. There is something iffy about the bias gradients calculation part. 
+        clamped_nodes = self.network.clamped_weights()
+
+        # Need to apply clamping mask for values that are fixed.
+        clamped_weight_mask = torch.ones_like(W)
+        clamped_weight_mask[clamped_weights] = 0
+        # If weights are zero previously, their gradients should be zero. Need to confirm if previous calculation ensures this.
+
+        clamped_bias_mask = torch.ones_like(B)
+        clamped_bias_mask[clamped_nodes] = 0
+
+        weight_grads = (weight_grads+cost_grads) * clamped_mask 
+
+        cost_grads_bias = cost_grads.view(bias_grads.shape)
+        bias_grads = (bias_grads + cost_grads_bias) * clamped_bias_mask
+
+        return weight_grads, bias_grads
 

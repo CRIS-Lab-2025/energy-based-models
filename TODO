@@ -1,0 +1,3 @@
+Shift all new vectors to device. 
+Fix bias gradient calculation.
+Add SLURM support via args management. 

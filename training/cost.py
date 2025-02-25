@@ -17,11 +17,10 @@ class CostFunction(ABC):
 
 class SquaredError(CostFunction):
     
-    def __init__(self, network, config):
+    def __init__(self, config):
         super().__init__()
-        self._network = network
         self._config = config
-        self._layer = network.layers[-1]
+        self._layer = config.cost_fn['output_layer']
 
     def calculate(self, S, target):
         """Computes the squared error cost
