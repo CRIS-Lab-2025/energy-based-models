@@ -1,5 +1,5 @@
 import torch
-from model.layer import Layer, DropOutLayer
+from _trash.layer import Layer, DropOutLayer
 
 def get_activation(layer: Layer):
     """Returns the given layer's activation function applied to it's state"""

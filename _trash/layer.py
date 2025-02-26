@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from model.variable import *
-from functions.activation import *
+from _trash.variable import *
+from core.activation import *
 
 class Layer(Variable, ABC):
     """

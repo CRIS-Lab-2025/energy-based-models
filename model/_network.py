@@ -3,13 +3,12 @@ import torch
 
 class Network(ABC):
     # TODO
-    def __init__(self, config, number_of_neurons):
-        # FIXME
+    def __init__(self, config, num_neurons, activation='hard_sigmoid'):
         self.config = config
-        self._state = torch.zeros(number_of_neurons, device=config.device) # TODO: do we need to set device?
-        self._weights = torch.zeros((number_of_neurons, number_of_neurons))
-        self._biases = torch.zeros(number_of_neurons)
-        self.activations = _ # TODO
+        self._state = torch.zeros(num_neurons)
+        self._weights = torch.zeros((num_neurons, num_neurons))
+        self._biases = torch.zeros(num_neurons)
+        self.activation = activation
 
     @property
     def state(self):
@@ -23,6 +22,12 @@ class Network(ABC):
     def biases(self):
         return self._biases
     
+    def set_input(self, input: torch.Tensor):
+        """Update the network state by setting the input to the values 
+        in the given tensor.
+        """
+        self.state[:input.shape[0]] = input
+    
     def create_edge(self, pre_index, post_index, weight=1):
         """Create an edge initialized with the specified weight value.
 
@@ -31,12 +36,16 @@ class Network(ABC):
             post_index (int): the index of the recieving neuron
             weight (int, optional): the initial value of this weight. Default=1
         """
-        self._weights[pre_index][post_index] = weight
-    
-    @abstractmethod
-    def update(self):
-        pass
+        self._weights[post_index][pre_index] = weight
 
-    def clamp(self, neurons_to_clamp):
-        # TODO
-        pass
+    def clamp(self, neurons):
+        """Clamp the given neurons so that no matter what their value does not change.
+
+        Args:
+            neurons (List[int]): a list of the indices of the neurons that should be clamped
+        """
+        for neuron in neurons: 
+            self._weights[neuron] = torch.zeros_like(self._weights[neuron]) 
+            self._weights[neuron][neuron] = 1
+        # TODO: If we want to clamp neurons DURING training we need to make sure that 1 value never updates
+        # TODO: To implement the above, we may as well come up with a way to clamp WEIGHTS during training
