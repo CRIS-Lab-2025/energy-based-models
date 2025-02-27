@@ -49,3 +49,11 @@ class Network(ABC):
             self._weights[neuron][neuron] = 1
         # TODO: If we want to clamp neurons DURING training we need to make sure that 1 value never updates
         # TODO: To implement the above, we may as well come up with a way to clamp WEIGHTS during training
+
+    def get_clamped_indices(self):
+        """Return a list of indices of every clamped neuron in the network."""
+        clamped = []
+        for i in range(self.state.size()):
+            if torch.sum(torch.abs(self.weights[i])) == 1 and self.weights[i][i] == 1:
+                clamped.append(i)
+        return clamped
