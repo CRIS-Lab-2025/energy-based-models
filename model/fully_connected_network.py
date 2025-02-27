@@ -9,7 +9,7 @@ class FullyConnectedNetwork(Network):
         self._layer_shapes = layer_shapes
         self.input_shape = layer_shapes[0]
         self.num_layers = len(layer_shapes)
-        
+        self.layers = [range(self._layer_start(l),self._layer_end(l)) for l in range(self.num_layers)]
         super().__init__(config, num_neurons, activation=activation)
         self._init_edges()
 
