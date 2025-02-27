@@ -1,6 +1,6 @@
 import torch
-import sys
-sys.path.append('/Users/Hanita/CRIS/energy-based-models')
+import os,sys 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model._network import Network
 
 class FullyConnectedNetwork(Network):
@@ -48,7 +48,7 @@ class FullyConnectedNetwork(Network):
         """
         return self._layer_shapes[l] + self._layer_start(l)
     
-    def _layer_state(self, l):
+    def get_layer_state(self, l):
         """Returns the current state of the given layer. Layer 0 is the input layer.
 
         Args:
@@ -56,7 +56,7 @@ class FullyConnectedNetwork(Network):
         """
         return self._state[self._layer_start(l):self._layer_end(l)]
     
-    def _layer_indices(self, l):
+    def get_layer_indices(self, l):
         return range(self._layer_start(l),self._layer_end(l))
     
     def set_input(self, input: torch.Tensor):
@@ -69,4 +69,4 @@ class FullyConnectedNetwork(Network):
     
     def clamp_layer(self, l):
         """Clamp all neurons in the given layer"""
-        self.clamp(self._layer_indices(l))
+        self.clamp(self.get_layer_indices(l))
