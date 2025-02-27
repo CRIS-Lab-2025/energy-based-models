@@ -85,7 +85,7 @@ class Runner:
             # Assume the network has an attribute B representing the bias matrix.
             W, B = self._network.weight, self._network.bias
             # Let the network settle to equilibrium.
-            W, S = self._updater.compute_equilibrium(S, W, B)
+            S = self._updater.compute_equilibrium(S, W, B)
             # Compute parameter gradients (assumed to return (weight_grads, bias_grads)).
             weight_grads, bias_grads = self._differentiator.compute_gradient(S, W, B, target)
             # Assign gradients to the parameters.
