@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import random
 
 class Updater(ABC):
     # TODO
@@ -7,15 +6,15 @@ class Updater(ABC):
         super().__init__()
 
     @abstractmethod
-    def _update_order(self):
+    def _update_order(self)
         pass
 
     @abstractmethod
-    def step(self):
+    def step(self)
         pass
 
     @abstractmethod
-    def compute_equilibrium(self):
+    def compute_equilibrium(self)
         pass
 
 
@@ -35,9 +34,9 @@ class FixedPointUpdater(Updater):
         
         # determine the order in which to update the nodes
         self.update_order = []
-        if self.order == 'synchronous':
+        if self.order = 'synchronous':
             self.update_order = self.network.free_layers
-        elif self.order == 'asynchronous':
+        elif self.order = 'asynchronous':
             # randomize order
             layers = self.network.free_layers
             random.shuffle(layers)
@@ -49,14 +48,14 @@ class FixedPointUpdater(Updater):
         for layer in self.update_order:
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
-                grad = self.energy_fn.node_gradient(S, W, B, node)
+                grad, _ = self.energy_fn.node_gradient(S, W, B, node)
 
                 # add the cost gradient
                 if layer == self.cost_fn.layer and target is not None:
                     grad += nudging * self.cost_fn.node_gradient(S, target, node)
 
                 # pass through activation function
-                grad = self.network.activation_fn[layer](grad)
+                grad = self.network.activation_fn(grad)
 
                 # update the state
                 S[node] = grad

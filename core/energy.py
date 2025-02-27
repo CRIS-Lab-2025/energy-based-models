@@ -52,7 +52,7 @@ class HopfieldEnergy(EnergyFunction):
             Tensor: Gradient of the energy function, with the same shape as `state`.
         """
         # Compute the bias term. If state is batched, bias will be broadcasted.
-        grad = -bias
+        bias_grad = -bias
 
         # For each node i, add contributions from both pre- and post-synaptic terms.
         # If state is 1D, torch.matmul treats it as a row vector.
@@ -61,8 +61,10 @@ class HopfieldEnergy(EnergyFunction):
         #     sum_j state[j] * weight[j, i]  (i.e. the pre-synaptic contribution)
         #   torch.matmul(state, weight.t()) computes a vector with components
         #     sum_j state[j] * weight[i, j]  (i.e. the post-synaptic contribution)
-        grad = grad - (torch.matmul(state, weight) + torch.matmul(state, weight.t()))
-        return grad
+        weight_grad = - (torch.matmul(state, weight) + torch.matmul(state, weight.t()))
+        grad = bias_grad + weight_grad
+        return grad, [weight_grad, bias_grad]
+
 
     def node_gradient(self, state, weight, bias, node_index):
         """
@@ -80,20 +82,18 @@ class HopfieldEnergy(EnergyFunction):
         """
         # For node i, the gradient is:
         #   - bias[i] - (sum_j weight[i,j] * state[j] + sum_j weight[j,i] * state[j])
+        bias_grad = -bias[node_index]
+
         if state.dim() == 1:
-            grad_i = -bias[node_index]
-            grad_i = grad_i - torch.dot(state, weight[node_index])   # post-synaptic
-            grad_i = grad_i - torch.dot(state, weight[:, node_index])  # pre-synaptic
+            weight_grad = -(weight[node_index] + weight[:, node_index])
+            grad_i = bias_grad + weight_grad
         elif state.dim() == 2:
-            # For a batched state (batch_size, n), subtract bias unsqueezed to broadcast.
-            grad_i = -bias[node_index]
-            # Compute dot products for each sample in the batch:
-            post_contrib = (state * weight[node_index]).sum(dim=1)
-            pre_contrib = (state * weight[:, node_index]).sum(dim=1)
-            grad_i = grad_i - post_contrib - pre_contrib
+            weight_grad = -(weight[node_index] + weight[:, node_index])
+            grad_i = bias_grad + (state * weight_grad).sum(dim=1)
         else:
             raise ValueError("State tensor must be 1D or 2D.")
-        return grad_i
+        
+        return grad_i, [weight_grad, bias_grad]
 
 
 class ConvHopfieldEnergu(EnergyFunction):

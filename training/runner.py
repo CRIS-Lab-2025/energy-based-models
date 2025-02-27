@@ -92,6 +92,7 @@ class Runner:
             W.grad, B.grad = weight_grads, bias_grads
             # Update parameters.
             self._optimizer.step()
+            
         return S, W, B
 
     def inference_epoch(self):
@@ -122,9 +123,9 @@ class Runner:
         """
         for epoch in tqdm(range(self._epochs), desc="Epochs"):
             print(f"Epoch: {epoch}")
-            W, S = self.training_epoch()
-            self._network.weights = W
-            self._network.state = S
+            S, W, B = self.training_epoch()
+            self._network._weights = W
+            self._network._state = S
             # Compute a dummy metric (for example, the mean of S) to decide on best model.
             # Replace this with your actual evaluation/metric computation.
             metric = S.mean().item()
