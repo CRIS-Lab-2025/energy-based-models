@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import random
 
 class Updater(ABC):
     # TODO
@@ -6,15 +7,15 @@ class Updater(ABC):
         super().__init__()
 
     @abstractmethod
-    def _update_order(self)
+    def _update_order(self):
         pass
 
     @abstractmethod
-    def step(self)
+    def step(self):
         pass
 
     @abstractmethod
-    def compute_equilibrium(self)
+    def compute_equilibrium(self):
         pass
 
 
@@ -34,9 +35,9 @@ class FixedPointUpdater(Updater):
         
         # determine the order in which to update the nodes
         self.update_order = []
-        if self.order = 'synchronous':
+        if self.order == 'synchronous':
             self.update_order = self.network.free_layers
-        elif self.order = 'asynchronous':
+        elif self.order == 'asynchronous':
             # randomize order
             layers = self.network.free_layers
             random.shuffle(layers)
