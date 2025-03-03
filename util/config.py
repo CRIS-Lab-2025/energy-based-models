@@ -5,11 +5,11 @@ class Config:
         # Default configuration settings
         self.path = "papers/fast-drn/model/EP"
         self.comment = "Make dict of hyperparameters for ease of use."
-        self.device = "cuda"
+        self.device = "mps"
         self.model = {
             "model_name": "model",
             "weight_init_dist": "xavier_uniform",
-            "layers": [1, 64, 1],
+            "layers": [1, 16,16, 1],
             "output_layer": -1
         }
         self.gradient_estimator = {

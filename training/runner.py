@@ -4,6 +4,7 @@ import logging
 import torch
 from tqdm import tqdm
 import wandb
+import numpy as np
 
 def create_dir(path):
     """
@@ -106,14 +107,17 @@ class Runner:
             A list of tuples (W, S) for each batch.
         """
         outputs = []
-        for x, _ in tqdm(self._inference_dataloader, desc="Inference Batches"):
+        ground_truth = []
+        for x, y in tqdm(self._inference_dataloader, desc="Inference Batches"):
             # (Zeroing gradients is optional during inference.)
             self._optimizer.zero_grad()
             S = self._network.set_input(x)
-            W, B = self._network.weight, self._network.bias
-            W, S = self._updater.compute_equilibrium(S, W, B)
-            outputs.append((W, S))
-        return outputs
+            W, B = self._network.weights, self._network.biases
+            S = self._updater.compute_equilibrium_pred(S, W, B)
+            outputs.append(S)
+            ground_truth.append(y)
+            # print(S[-1],y)
+        return outputs, ground_truth
 
     def run_training(self):
         """
@@ -124,33 +128,64 @@ class Runner:
         for epoch in tqdm(range(self._epochs), desc="Epochs"):
             print(f"Epoch: {epoch}")
             S, W, B = self.training_epoch()
+            energy = 0 #self._network._compute_energy(S, W, B).item()
+
             self._network._weights = W
             self._network._state = S
             self._network._biases = B
+
+            # Run inference to compute accuracy
+            inference_results, ground_truth = self.inference_epoch()
+
+            # Accuracy computation
+            correct_predictions = 0
+            total_predictions = 0
+
+            # print(inference_results[0])
+            # print(ground_truth)
+
+            it = 0 ;
+            for S in inference_results:
+                Sp = S[0][-2:].detach().numpy()
+                predicted_labels = np.argmax(Sp) # Assuming classification task
+                target_labels = int(ground_truth[it])  # Define a method to get inference labels
+                # print(predicted_labels, target_labels)
+                it = it + 1;
+                correct_predictions += (predicted_labels == target_labels).sum().item()
+                total_predictions +=1
+
+            accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0.0
+
+
             # Compute a dummy metric (for example, the mean of S) to decide on best model.
             # Replace this with your actual evaluation/metric computation.
-            metric = S.mean().item()
+            # metric = S.mean().item()
+
+            # print(metric)
 
             # Log metrics to wandb if enabled.
             if self._use_wandb:
                 wandb.log({
                     "Epoch": epoch,
-                    "Metric": metric,
+                    "Energy": energy,
+                    "Accuracy": accuracy,
                 })
 
-            # Log to file if enabled.
             if self._log:
-                logging.info(f"Epoch: {epoch}, Metric: {metric:.4f}")
+                logging.info(f"Epoch: {epoch}, Energy: {energy:.4f}, Accuracy: {accuracy:.4f}")
+                print(f"Epoch: {epoch}, Energy: {energy:.4f}, Accuracy: {accuracy:.4f}")
+
 
             # Save a checkpoint every checkpoint_epoch.
             if epoch % self._checkpoint_epoch == 0:
                 checkpoint_path = os.path.join(self._model_path, f'epoch_{epoch}.pth')
-                torch.save(self._network.state_dict(), checkpoint_path)
+                # torch.save(self._network.state_dict(), checkpoint_path)
 
             # Save the best model if the metric improves.
-            if metric > self._best_metric:
-                self._best_metric = metric
-                torch.save(self._network.state_dict(), self._best_model_path)
+            if accuracy > self._best_metric:
+                self._best_metric = accuracy
+                # torch.save(self._network.state_dict(), self._best_model_path)
+
 
         if self._use_wandb:
             wandb.finish()

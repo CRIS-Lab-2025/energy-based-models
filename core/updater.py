@@ -79,6 +79,14 @@ class FixedPointUpdater(Updater):
             S = self.step(S,W,B,target,nudging)
 
         return S
+    
+    def compute_equilibrium_pred(self, S, W,B):
+        
+        # iterate for a fixed number of steps to reach equilibrium
+        for i in range(self.iterations):
+            S = self.step(S,W,B,None, 0)
+
+        return S
 
 
 
