@@ -41,7 +41,7 @@ class FixedPointUpdater(Updater):
             # randomize order
             layers = self.network.free_layers
             random.shuffle(layers)
-            self.update_order = layers
+            self.update_order = layers.append(self.network.free_layers[-1])
         else:
             raise ValueError("Invalid update order")
 
@@ -52,7 +52,10 @@ class FixedPointUpdater(Updater):
                 grad, _ = self.energy_fn.node_gradient(S, W, B, node)
                 # add the cost gradient
                 if layer == self.cost_fn._layer and target is not None:
-                        grad += nudging * self.cost_fn.node_gradient(S, target, node)
+                        # index of node in the class layer
+                        class_id = self.network.layers[self.cost_fn._layer].index(node)
+                        cost_grad = self.cost_fn.node_gradient(grad, target, node, class_id)
+                        grad += nudging * cost_grad
                 # update the state
                 S[:,node] = grad
             # layer activation

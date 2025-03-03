@@ -5,6 +5,8 @@ import torch
 from tqdm import tqdm
 import wandb
 
+
+
 def create_dir(path):
     """
     Creates a directory if it does not exist.
@@ -79,21 +81,27 @@ class Runner:
         """
         # Get original parameters
         W, B = self._network.weights, self._network.biases
+        # Expand without detaching/cloning so gradients can flow back:
+        W_expanded = W.unsqueeze(0).expand(self._config.training['batch_size'], *W.shape)
+        B_expanded = B.unsqueeze(0).expand(self._config.training['batch_size'], *B.shape)
+        outputs = []
+        targets = []
         for x, target in tqdm(self._dataloader, desc="Training Batches"):
             self._optimizer.zero_grad()
             S = self._network.set_input(x)
-            # Expand without detaching/cloning so gradients can flow back:
-            W_expanded = W.unsqueeze(0).expand(x.shape[0], *W.shape)
-            B_expanded = B.unsqueeze(0).expand(x.shape[0], *B.shape)
+            
             # Let the network settle to equilibrium.
             S = self._updater.compute_equilibrium(S, W_expanded, B_expanded, target)
             # Compute parameter gradients.
             weight_grads, bias_grads = self._differentiator.compute_gradient(S, W_expanded, B_expanded, target)
             # Assign gradients to the original parameters.
+            # print(W)
             W.grad, B.grad = weight_grads, bias_grads
             self._optimizer.step()
-
-        return S, W, B
+            output = S[:,self._network.layers[-1]].clone()
+            outputs.append(output)
+            targets.append(target)
+        return outputs, targets
 
     def inference_epoch(self):
         """
@@ -106,13 +114,16 @@ class Runner:
             A list of tuples (W, S) for each batch.
         """
         outputs = []
-        for x, _ in tqdm(self._inference_dataloader, desc="Inference Batches"):
+        targets = []
+        for x, target in tqdm(self._inference_dataloader, desc="Inference Batches"):
             # (Zeroing gradients is optional during inference.)
             self._optimizer.zero_grad()
             S = self._network.set_input(x)
             W, B = self._network.weight, self._network.bias
             W, S = self._updater.compute_equilibrium(S, W, B)
-            outputs.append((W, S))
+            output = S[self._network.layers[-1]].clone()
+            outputs.append(output)
+            targets.append(target)
         return outputs
 
     def run_training(self):
@@ -121,17 +132,37 @@ class Runner:
         Logs metrics (dummy metric used here—you can replace with your own evaluation),
         saves checkpoints at intervals, and saves the best model.
         """
-        for epoch in tqdm(range(self._epochs), desc="Epochs"):
-            print(f"Epoch: {epoch}")
-            S, W, B = self.training_epoch()
-            self._network._weights = W
-            self._network._state = S
-            self._network._biases = B
-            # Compute a dummy metric (for example, the mean of S) to decide on best model.
-            # Replace this with your actual evaluation/metric computation.
-            metric = S.mean().item()
+        import tracemalloc
+         
 
+            
+
+        for epoch in range(self._epochs):
+            print(f"Epoch: {epoch}")
+            tracemalloc.start()
+            outputs,targets = self.training_epoch()
             # Log metrics to wandb if enabled.
+            # Calculate accuracy
+            if self._config.model['layers'][self._config.model['output_layer']] > 1:
+                outputs = torch.cat(outputs).argmax(dim=1)
+            else:
+                outputs = torch.cat(outputs)
+                # if value is greater than 0.5, set to 1, else 0
+                outputs = (outputs > 0.5).float().flatten()
+            targets = torch.cat(targets)
+            # Calculate accuracy
+            correct = (outputs == targets).sum().item()
+            total = len(targets)
+            metric = correct / total
+
+            snapshot = tracemalloc.take_snapshot()
+
+            top_stats = snapshot.statistics('lineno')  
+
+            #print(top_stats)  # Shows detailed information about memory allocations
+
+            tracemalloc.stop()
+            print(f"Accuracy: {metric:.4f}")
             if self._use_wandb:
                 wandb.log({
                     "Epoch": epoch,

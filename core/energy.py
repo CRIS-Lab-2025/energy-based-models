@@ -67,7 +67,7 @@ class HopfieldEnergy(EnergyFunction):
         # Compute the full gradient matrix directly
         # For each sample in the batch, compute the outer product of the state vector with itself
         # Then average over the batch
-        weight_grad = -torch.tensordot(state, state, dims=([0], [0])) / batch_size
+        weight_grad = -torch.matmul(state.transpose(0, 1), state) / batch_size
 
         return None, [weight_grad, bias_grad]
 

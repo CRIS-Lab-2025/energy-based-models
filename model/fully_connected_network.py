@@ -1,5 +1,7 @@
 import torch
 import os,sys 
+import torch.nn as nn
+import numpy as np
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model._network import Network
 
@@ -27,14 +29,17 @@ class FullyConnectedNetwork(Network):
         for input_index in range(self._layer_shapes[0]): 
             # ensure inputs don't change
             self._weights[input_index,input_index]=1
-
+        weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)])
         for layer in range(self.num_layers-1):
             # create edges from each layer to the next
             col_start = self._layer_start(layer)
             col_end = self._layer_end(layer)
             row_start = self._layer_start(layer+1)
             row_end = self._layer_end(layer+1)
-            self._weights[row_start:row_end, col_start:col_end] = 1
+            # do kaiming initialization
+            nn.init.kaiming_normal_(self._weights[row_start:row_end, col_start:col_end], a=weight_gains[layer])
+
+            self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.95)
         
     
     def _layer_start(self, l):

@@ -9,7 +9,6 @@ class CostFunction(ABC):
             num_classes (int): number of categories in the classification task
         """
         self._num_classes = num_classes
-        self._layer = None
 
     @abstractmethod
     def calculate():
@@ -23,6 +22,8 @@ class SquaredError(CostFunction):
         self._layer = config.cost_function['output_layer']
         num_classes = config.model['layers'][self._layer]
         super().__init__(num_classes)
+        
+
 
     def calculate(self, S, target):
         """Computes the squared error cost
@@ -57,7 +58,7 @@ class SquaredError(CostFunction):
             target = target.mean(dim=0)
         return output - target
 
-    def node_gradient(self, S, target, node, mean=False):
+    def node_gradient(self, grad, target, node, class_id, mean=False):
         """Computes the gradient of the cost function with respect to a single node.
 
         Args:
@@ -68,9 +69,19 @@ class SquaredError(CostFunction):
         Returns:
             Tensor: Gradient of the cost function, with the same shape as `state`.
         """
-        output = S[node]
-        if mean:
-            output = S[:, node].mean()
-            target = target.mean()
-        return output - target[node]
+        
+        # if more than one class, return the gradient for the class
+        if self._num_classes > 1:
+            output = grad
+            if mean:
+                output = grad.mean(dim=0)
+                target = target.mean(dim=0)
+            return output - target[:,class_id]
+        else:
+            output = grad
+            if mean:
+                output = grad.mean(dim=0)
+                target = target.mean(dim=0)
+            return target - output
+           
         

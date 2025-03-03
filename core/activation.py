@@ -38,9 +38,20 @@ def sigmoid(neurons: torch.Tensor):
     """Returns the logistic function applied to the layer's state"""
     return torch.sigmoid(4 * neurons - 2)
 
-def hard_sigmoid(neurons: torch.Tensor):
-    """Returns the value of the layer's state, clamped between 0 and 1"""
-    return torch.clamp((neurons + 1) / 2, min=0., max=1.)
+def hard_sigmoid(x, lower=0.0, upper=1.0, slope=0.2):
+    
+    # Calculate the range scaling
+    range_scale = upper - lower
+    
+    # Compute hard_sigmoid 
+    # y = max(0, min(1, slope*x + 0.5))
+    result = torch.clamp(slope * x + 0.5, 0.0, 1.0)
+    
+    # Scale to the desired range
+    if lower != 0.0 or upper != 1.0:
+        result = lower + range_scale * result
+        
+    return result
 
 def softmax(neurons: torch.Tensor):
     """Returns the softmax function applied to the layer's state"""
