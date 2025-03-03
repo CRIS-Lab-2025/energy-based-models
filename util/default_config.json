@@ -37,7 +37,7 @@
     "training": {
         "num_epochs": 25,
         "checkpoint_interval": 5,
-        "batch_size": 1,
+        "batch_size": 16,
         "tensorboard": true,
         "save_model": true,
         "log": true,

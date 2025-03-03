@@ -49,26 +49,14 @@ class FixedPointUpdater(Updater):
         for layer in self.update_order:
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
-                try:
-                    grad, _ = self.energy_fn.node_gradient(S, W, B, node)
-                except:
-                    
-                    print(S.shape)
-                    print(W.shape)
-                    print(B.shape)
-                    print(node)
-                    # Kill the process
-                    raise ValueError("Invalid node index")
+                grad, _ = self.energy_fn.node_gradient(S, W, B, node)
                 # add the cost gradient
                 if layer == self.cost_fn._layer and target is not None:
-                    grad += nudging * self.cost_fn.node_gradient(S, target, node)
-
-                # pass through activation function
-                grad = get_activation_neuron(self.network.activation,grad)
-                
+                        grad += nudging * self.cost_fn.node_gradient(S, target, node)
                 # update the state
                 S[:,node] = grad
-   
+            # layer activation
+            S[:,self.network.layers[layer]] = get_activation_neuron(self.network.activation, S[:,self.network.layers[layer]])
         return S
         
 

@@ -77,22 +77,22 @@ class Runner:
         Returns:
             The final updated weight and state tensors (W, S) from the last batch.
         """
+        # Get original parameters
+        W, B = self._network.weights, self._network.biases
         for x, target in tqdm(self._dataloader, desc="Training Batches"):
-            # Zero gradients for current batch.
             self._optimizer.zero_grad()
-            # Set the input and retrieve current parameters.
             S = self._network.set_input(x)
-            # Assume the network has an attribute B representing the bias matrix.
-            W, B = self._network.weights, self._network.biases
+            # Expand without detaching/cloning so gradients can flow back:
+            W_expanded = W.unsqueeze(0).expand(x.shape[0], *W.shape)
+            B_expanded = B.unsqueeze(0).expand(x.shape[0], *B.shape)
             # Let the network settle to equilibrium.
-            S = self._updater.compute_equilibrium(S, W, B, target)
-            # Compute parameter gradients (assumed to return (weight_grads, bias_grads)).
-            weight_grads, bias_grads = self._differentiator.compute_gradient(S, W, B, target)
-            # Assign gradients to the parameters.
+            S = self._updater.compute_equilibrium(S, W_expanded, B_expanded, target)
+            # Compute parameter gradients.
+            weight_grads, bias_grads = self._differentiator.compute_gradient(S, W_expanded, B_expanded, target)
+            # Assign gradients to the original parameters.
             W.grad, B.grad = weight_grads, bias_grads
-            # Update parameters.
             self._optimizer.step()
-            
+
         return S, W, B
 
     def inference_epoch(self):
@@ -143,14 +143,14 @@ class Runner:
                 logging.info(f"Epoch: {epoch}, Metric: {metric:.4f}")
 
             # Save a checkpoint every checkpoint_epoch.
-            if epoch % self._checkpoint_epoch == 0:
-                checkpoint_path = os.path.join(self._model_path, f'epoch_{epoch}.pth')
-                torch.save(self._network.state_dict(), checkpoint_path)
+            # if epoch % self._checkpoint_epoch == 0:
+            #     checkpoint_path = os.path.join(self._model_path, f'epoch_{epoch}.pth')
+            #     torch.save(self._network.state_dict(), checkpoint_path)
 
-            # Save the best model if the metric improves.
-            if metric > self._best_metric:
-                self._best_metric = metric
-                torch.save(self._network.state_dict(), self._best_model_path)
+            # # Save the best model if the metric improves.
+            # if metric > self._best_metric:
+            #     self._best_metric = metric
+            #     torch.save(self._network.state_dict(), self._best_model_path)
 
         if self._use_wandb:
             wandb.finish()

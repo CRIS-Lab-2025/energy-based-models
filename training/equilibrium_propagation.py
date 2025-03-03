@@ -69,12 +69,13 @@ class EquilibriumProp():
         # Apply clamping mask to the gradients
         clamped_nodes = self.network.get_clamped_indices()
 
-        # Need to apply clamping mask for values that are fixed.
-        clamped_weight_mask = torch.ones_like(W)
-        clamped_weight_mask[clamped_nodes] = 0
+        # Need to apply clamping mask for values that are fixed and non-existent in the graph
+        clamped_weight_mask = (W.clone().detach()[0,::] != 0).float()
+        clamped_weight_mask[clamped_nodes,:] = 0
+
         # If weights are zero previously, their gradients should be zero. Need to confirm if previous calculation ensures this.
 
-        clamped_bias_mask = torch.ones_like(B)
+        clamped_bias_mask = torch.ones_like(bias_grads)
         clamped_bias_mask[clamped_nodes] = 0
 
         weight_grads = weight_grads * clamped_weight_mask 

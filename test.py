@@ -36,8 +36,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
 train_size = int(0.8 * len(dataset))
 test_size = len(dataset) - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=True)
+
 
 import torch
 from model.fully_connected_network import FullyConnectedNetwork
@@ -56,5 +55,7 @@ updater = FixedPointUpdater(network, energy_fn, cost_fn, config)
 W, B = network.weights, network.biases
 optimizer = torch.optim.SGD([W, B], lr=0.01)
 differentiator = EquilibriumProp(network, energy_fn, cost_fn, updater, config, optimizer)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.training["batch_size"], shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.training["batch_size"], shuffle=True)
 runner = Runner(config, network, train_loader, differentiator, updater, optimizer, inference_dataloader=None)
 runner.run_training()

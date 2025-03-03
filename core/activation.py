@@ -40,7 +40,7 @@ def sigmoid(neurons: torch.Tensor):
 
 def hard_sigmoid(neurons: torch.Tensor):
     """Returns the value of the layer's state, clamped between 0 and 1"""
-    return neurons.clamp(min=0., max=1.)
+    return torch.clamp((neurons + 1) / 2, min=0., max=1.)
 
 def softmax(neurons: torch.Tensor):
     """Returns the softmax function applied to the layer's state"""
