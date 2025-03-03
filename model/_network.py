@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
 import torch
-
+from util.config import Config
 
 class Network(ABC):
-    # TODO
-    def __init__(self, config, num_neurons,batch_size, activation='hard_sigmoid'):
+    def __init__(self, config: Config, num_neurons,batch_size, activation='hard_sigmoid'):
         self.config = config
-        self._state = torch.zeros((batch_size,num_neurons))
-        self._weights = torch.zeros((num_neurons, num_neurons))
-        self._biases = torch.zeros(num_neurons)
+        self._state = torch.zeros((batch_size,num_neurons, device=config.device))
+        self._weights = torch.zeros((num_neurons, num_neurons), device=config.device)
+        self._biases = torch.zeros(num_neurons, device=config.device)
         self.activation = activation
 
     @property
