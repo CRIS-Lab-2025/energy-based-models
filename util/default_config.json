@@ -5,10 +5,11 @@
     "model":{
         "model_name": "model",
         "weight_init_dist": "xavier_uniform",
-        "layers": [1,64,1],
+        "activation": "hard-sigmoid",
+        "layers": [3,64,2],
         "output_layer": -1
     },
-    "gradient_estimator":{
+    "gradient_propagation":{
         "name": "equilibrium_propagation",
         "nudging": 0.2,
         "variant": "centered",
@@ -18,14 +19,12 @@
         "name": "squared_error",
         "output_layer": -1
     },
-    "augmented_function": {
-        "name": "fixed_point"
-    },
-    "minimizer":{
+
+    "updater":{
         "name": "fixed_point",
-        "training_mode": "asynchronous",
+        "training_order": "asynchronous",
         "training_iterations": 20,
-        "inference_mode": "asynchronous",
+        "inference_order": "asynchronous",
         "inference_iterations": 50
     },
     "optimizer": {
@@ -37,8 +36,11 @@
     },
     "training": {
         "num_epochs": 25,
-        "batch_size": 64,
+        "checkpoint_interval": 5,
+        "batch_size": 1,
         "tensorboard": true,
-        "save_model": true
+        "save_model": true,
+        "log": true,
+        "wandb": false
     }
 } 

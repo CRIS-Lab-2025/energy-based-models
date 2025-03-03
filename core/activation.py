@@ -3,13 +3,13 @@ from model._network import Network
 
 def get_activation(network: Network):
     """Returns the given network's activation function applied to it's state"""
-    return get_activation(network.activation, network.state)
+    return get_activation_neuron(network.activation, network.state)
     
-def get_activation(activation, neurons: torch.Tensor):
+def get_activation_neuron(activation, neurons: torch.Tensor):
     """Returns the given activation function applied to the given neuron values.
 
     Args:
-        activation (string): the activation function to use. 'none', 'linear', 'sigmoid', 'hard_sigmoid', 'softmax', and 'dsilu' are all valid
+        activation (string): the activation function to use. 'none', 'linear', 'sigmoid', 'hard-sigmoid', 'softmax', and 'dsilu' are all valid
         neurons (torch.Tensor): the state values of the desired neurons.
     """
     if activation == 'none':
@@ -18,7 +18,7 @@ def get_activation(activation, neurons: torch.Tensor):
         return linear(neurons)
     elif activation == 'sigmoid':
         return sigmoid(neurons)
-    elif activation == 'hard_sigmoid':
+    elif activation == 'hard-sigmoid':
         return hard_sigmoid(neurons)
     elif activation == "softmax":
         return softmax(neurons)

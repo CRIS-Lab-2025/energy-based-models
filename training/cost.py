@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+import torch
 class CostFunction(ABC):
     # TODO
     def __init__(self, num_classes):
@@ -18,9 +18,11 @@ class CostFunction(ABC):
 class SquaredError(CostFunction):
     
     def __init__(self, config):
-        super().__init__()
+        
         self._config = config
-        self._layer = config.cost_fn['output_layer']
+        self._layer = config.cost_function['output_layer']
+        num_classes = config.model['layers'][self._layer]
+        super().__init__(num_classes)
 
     def calculate(self, S, target):
         """Computes the squared error cost
@@ -66,9 +68,9 @@ class SquaredError(CostFunction):
         Returns:
             Tensor: Gradient of the cost function, with the same shape as `state`.
         """
-        output = S[self._layer][node]
+        output = S[node]
         if mean:
-            output = S[self._layer][:, node].mean()
+            output = S[:, node].mean()
             target = target.mean()
         return output - target[node]
         

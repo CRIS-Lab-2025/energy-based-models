@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 import torch
 
+
 class Network(ABC):
     # TODO
-    def __init__(self, config, num_neurons, activation='hard_sigmoid'):
+    def __init__(self, config, num_neurons,batch_size, activation='hard_sigmoid'):
         self.config = config
-        self._state = torch.zeros(num_neurons)
+        self._state = torch.zeros((batch_size,num_neurons))
         self._weights = torch.zeros((num_neurons, num_neurons))
         self._biases = torch.zeros(num_neurons)
         self.activation = activation
@@ -53,7 +54,7 @@ class Network(ABC):
     def get_clamped_indices(self):
         """Return a list of indices of every clamped neuron in the network."""
         clamped = []
-        for i in range(self.state.size()):
+        for i in range(self.state.shape[1]):
             if torch.sum(torch.abs(self.weights[i])) == 1 and self.weights[i][i] == 1:
                 clamped.append(i)
         return clamped

@@ -41,23 +41,23 @@ class Runner:
         self._inference_dataloader = inference_dataloader if inference_dataloader is not None else dataloader
 
         # Set up directories for saving checkpoints/results.
-        self._result_path = config.get('result_path', './results')
+        self._result_path = config.path
         create_dir(self._result_path)
-        self._model_path = config.get('model_path', os.path.join(self._result_path, 'model_weights'))
+        self._model_path = config.path + "/model"
         create_dir(self._model_path)
-        self._best_model_path = config.get('best_model_path', os.path.join(self._result_path, 'best_model.pth'))
-        self._checkpoint_epoch = config.get('checkpoint_epoch', 1)
-        self._epochs = config.get('epochs', 10)
+        self._best_model_path = os.path.join(self._model_path, 'best_model.pth')
+        self._checkpoint_epoch = config.training['checkpoint_interval']
+        self._epochs = config.training['num_epochs']
 
         # Initialize wandb if enabled.
-        self._use_wandb = config.get('wandb', False)
+        self._use_wandb = config.training['wandb']
         if self._use_wandb:
             wandb.init(project=config.get('project_name', 'default_project'), config=config)
             if config.get('tag'):
                 wandb.run.tags = [config['tag']]
 
         # Set up logging if enabled.
-        self._log = config.get('log', True)
+        self._log = config.training['log']
         if self._log:
             logging.basicConfig(filename=os.path.join(self._result_path, 'results.log'),
                                 level=logging.INFO)
@@ -81,11 +81,11 @@ class Runner:
             # Zero gradients for current batch.
             self._optimizer.zero_grad()
             # Set the input and retrieve current parameters.
-            S = self._network.set_input(x, reset=False)
+            S = self._network.set_input(x)
             # Assume the network has an attribute B representing the bias matrix.
-            W, B = self._network.weight, self._network.bias
+            W, B = self._network.weights, self._network.biases
             # Let the network settle to equilibrium.
-            S = self._updater.compute_equilibrium(S, W, B)
+            S = self._updater.compute_equilibrium(S, W, B, target)
             # Compute parameter gradients (assumed to return (weight_grads, bias_grads)).
             weight_grads, bias_grads = self._differentiator.compute_gradient(S, W, B, target)
             # Assign gradients to the parameters.
@@ -109,7 +109,7 @@ class Runner:
         for x, _ in tqdm(self._inference_dataloader, desc="Inference Batches"):
             # (Zeroing gradients is optional during inference.)
             self._optimizer.zero_grad()
-            S = self._network.set_input(x, reset=False)
+            S = self._network.set_input(x)
             W, B = self._network.weight, self._network.bias
             W, S = self._updater.compute_equilibrium(S, W, B)
             outputs.append((W, S))
@@ -126,6 +126,7 @@ class Runner:
             S, W, B = self.training_epoch()
             self._network._weights = W
             self._network._state = S
+            self._network._biases = B
             # Compute a dummy metric (for example, the mean of S) to decide on best model.
             # Replace this with your actual evaluation/metric computation.
             metric = S.mean().item()

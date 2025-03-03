@@ -19,7 +19,7 @@ class EnergyFunction(ABC):
 
 class HopfieldEnergy(EnergyFunction):
     # TODO
-    def __init__(self):
+    def __init__(self,config):
         super().__init__()
 
 

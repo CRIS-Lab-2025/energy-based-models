@@ -4,15 +4,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model._network import Network
 
 class FullyConnectedNetwork(Network):
-    def __init__(self, config, layer_shapes, activation='hard-sigmoid', pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
+    def __init__(self, config, layer_shapes=None, activation='hard-sigmoid', pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
+        if layer_shapes is None:
+            layer_shapes = config.model['layers']
         num_neurons = sum(layer_shapes)
         self._layer_shapes = layer_shapes
         self.input_shape = layer_shapes[0]
         self.num_layers = len(layer_shapes)
         self.layers = [range(self._layer_start(l),self._layer_end(l)) for l in range(self.num_layers)]
-        super().__init__(config, num_neurons, activation=activation)
+        activation = config.model['activation']
+        self.batch_size = config.training['batch_size']
+        super().__init__(config, num_neurons,batch_size=self.batch_size, activation=activation)
         self._init_edges()
-
+        self._weights = torch.nn.Parameter(self._weights)
+        self._biases = torch.nn.Parameter(self._biases)
+        self.free_layers = list(range(1,self.num_layers))
         # TODO: after initializing the weights convert to nn.Parameter
     
     def _init_edges(self):
@@ -63,9 +69,10 @@ class FullyConnectedNetwork(Network):
         """Update the network state by setting the input to the values 
         in the given tensor.
         """
-        if input.shape[0] is not self.input_shape: 
+        if input.shape[1] is not self.input_shape: 
             raise ValueError('Wrong number of inputs. Got {} but expected {}'.format(input.shape[0], self.input_shape))
-        self.state[:self.input_shape] = input
+        self.state[:,:self.input_shape] = input
+        return self.state
     
     def clamp_layer(self, l):
         """Clamp all neurons in the given layer"""

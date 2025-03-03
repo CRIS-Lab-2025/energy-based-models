@@ -1,19 +1,20 @@
 import torch
-from functions.energy import *
-from functions.cost import *
-from estimators.updater import *
-from estimators.optimizer import *
+from core.energy import EnergyFunction
+from core.updater import Updater
+from training.cost import CostFunction
 
 
 class EquilibriumProp():
 
-    def __init__(self, energy_fn: EnergyFunction, cost_fn: CostFunction, updater: Updater, config):
+    def __init__(self,network, energy_fn: EnergyFunction, cost_fn: CostFunction, updater: Updater, config, optimizer):
         self.energy_fn = energy_fn
         self.cost_fn = cost_fn
         self.updater = updater
+        self.network = network
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99) # TODO: is this ok?
-        self._variant = config.propagation['variant']
-        self._nudging = config.propagation['nudging']
+        self._variant = config.gradient_propagation['variant']
+        self._nudging = config.gradient_propagation['nudging']
+        self._set_nudging()
 
     def _set_nudging(self):
 
@@ -35,10 +36,10 @@ class EquilibriumProp():
         """Computes the parameter gradients using the standard Equilibrium Propagation formula"""
 
         # Compute the energy gradients of the first state
-        _,[weight_grads_first,bias_grads_first] = self._energy_fn.full_gradient(W, first_S, B) 
+        _,[weight_grads_first,bias_grads_first] = self.energy_fn.full_gradient(first_S, W, B) 
 
         # Compute the energy gradients of the second state
-        _,[weight_grads_second,bias_grads_second]= self._energy_fn.full_gradient(W, second_S, B)
+        _,[weight_grads_second,bias_grads_second]= self.energy_fn.full_gradient(second_S, W, B)
 
         # Compute the parameter gradients
         weight_grads = weight_grads_second - weight_grads_first / (self._second_nudging - self._first_nudging)
@@ -57,16 +58,16 @@ class EquilibriumProp():
             param_grads: list of Tensor of shape param_shape and type float32. The parameter gradients
         """
         # First phase: compute the first equilibrium state of the layers
-        first_S = self._updater.compute_equilibrium(W, S, B, target, self._first_nudging)
+        first_S = self.updater.compute_equilibrium(S,W,B, target, self._first_nudging)
         
         # Second phase: compute the second equilibrium state of the layers
-        second_S = self._updater.compute_equilibrium(W, S, B, target, self._second_nudging)
+        second_S = self.updater.compute_equilibrium(S,W,B, target, self._second_nudging)
 
         # Compute the parameter gradients with either the standard EquilibriumProp formula, or the alternative EquilibriumProp formula
-        weight_grads, bias_grads = self._standard_param_grads(first_S, second_S, cost_grads, W, B)
+        weight_grads, bias_grads = self._standard_param_grads(first_S, second_S, W, B)
 
-        # Doesn't calculate grads for biases I think need to fix that. There is something iffy about the bias gradients calculation part. 
-        clamped_nodes = self.network.clamped_weights()
+        # Apply clamping mask to the gradients
+        clamped_nodes = self.network.get_clamped_indices()
 
         # Need to apply clamping mask for values that are fixed.
         clamped_weight_mask = torch.ones_like(W)
@@ -76,7 +77,7 @@ class EquilibriumProp():
         clamped_bias_mask = torch.ones_like(B)
         clamped_bias_mask[clamped_nodes] = 0
 
-        weight_grads = weight_grads * clamped_mask 
+        weight_grads = weight_grads * clamped_weight_mask 
         bias_grads = bias_grads * clamped_bias_mask
 
         return weight_grads, bias_grads
