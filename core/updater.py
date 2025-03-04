@@ -20,7 +20,9 @@ class Updater(ABC):
 
 
 class FixedPointUpdater(Updater):
-
+    """
+    Class used to #TODO
+    """
     def __init__(self, network, energy_fn, cost_fn, config):
         super().__init__()
         self.network = network
@@ -32,7 +34,7 @@ class FixedPointUpdater(Updater):
         self._update_order()
 
     def _update_order(self):
-        
+        """TODO"""
         # determine the order in which to update the nodes
         self.update_order = []
         if self.order == 'synchronous':
@@ -46,6 +48,13 @@ class FixedPointUpdater(Updater):
             raise ValueError("Invalid update order")
 
     def step(self, S, W, B, target=None, nudging=0):
+        """TODO
+        
+        Args:
+            S: state
+            W: weights
+            B: bias
+        """
         for layer in self.update_order:
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
@@ -64,7 +73,7 @@ class FixedPointUpdater(Updater):
         
 
     def compute_equilibrium(self, S, W,B,target,nudging=0):
-        
+        """TODO"""
         # iterate for a fixed number of steps to reach equilibrium
         for i in range(self.iterations):
             S = self.step(S,W,B,target,nudging)

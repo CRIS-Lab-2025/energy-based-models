@@ -1,5 +1,5 @@
 {
-    "path": "/results",
+    "path": "/Users/Hanita/CRIS/energy-based-models/results",
     "comment": "``` Make dict of hyperparameters for ease of use.",
     "device": "cpu",
     "model":{

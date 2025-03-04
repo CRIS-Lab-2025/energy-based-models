@@ -17,8 +17,7 @@ class EquilibriumProp():
         self._set_nudging()
 
     def _set_nudging(self):
-
-
+        """TODO"""
         if self._variant == "positive":
             self._first_nudging = 0.
             self._second_nudging = self._nudging
@@ -60,6 +59,8 @@ class EquilibriumProp():
         # First phase: compute the first equilibrium state of the layers
         first_S = self.updater.compute_equilibrium(S,W,B, target, self._first_nudging)
         
+        # Reset State before second equilibrium
+        self.network._reset_state()
         # Second phase: compute the second equilibrium state of the layers
         second_S = self.updater.compute_equilibrium(S,W,B, target, self._second_nudging)
 
