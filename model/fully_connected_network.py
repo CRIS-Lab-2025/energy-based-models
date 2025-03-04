@@ -26,11 +26,11 @@ class FullyConnectedNetwork(Network):
         """Create an edge from each node of each layer to each node of the subsequent layer.  
         """
         for input_index in range(self._layer_shapes[0]): 
-            # ensure inputs don't change
+            # ensure inputs don't change (clamp them)
             with torch.no_grad():
                 self._weights[input_index,input_index]=1
 
-        weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)])
+        weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)]) #TODO: make this configurable
         for layer in range(self.num_layers-1):
             # create edges from each layer to the next
             col_start = self._layer_start(layer)
