@@ -35,7 +35,7 @@ class FullyConnectedNetwork(Network):
                 # ensure inputs don't change
                 self._weights[input_index, input_index] = 1
 
-        weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)])
+        weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)]) #TODO: Make this settable and default to this
         for layer in range(self.num_layers-1):
             # create edges from each layer to the next
             col_start = self._layer_start(layer)
@@ -76,9 +76,6 @@ class FullyConnectedNetwork(Network):
         """
         return self._state[self._layer_start(l):self._layer_end(l)]
     
-    def get_layer_indices(self, l):
-        return range(self._layer_start(l),self._layer_end(l))
-    
     def set_input(self, input: torch.Tensor):
         """Update the network state by setting the input to the values 
         in the given tensor.
@@ -90,4 +87,4 @@ class FullyConnectedNetwork(Network):
     
     def clamp_layer(self, l):
         """Clamp all neurons in the given layer"""
-        self.clamp(self.get_layer_indices(l))
+        self.clamp(self.layers[l])

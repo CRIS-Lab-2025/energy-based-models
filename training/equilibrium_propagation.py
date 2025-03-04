@@ -17,8 +17,7 @@ class EquilibriumProp():
         self._set_nudging()
 
     def _set_nudging(self):
-
-
+        """TODO"""
         if self._variant == "positive":
             self._first_nudging = 0.
             self._second_nudging = self._nudging

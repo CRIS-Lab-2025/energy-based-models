@@ -39,7 +39,7 @@ def sigmoid(neurons: torch.Tensor):
     return torch.sigmoid(4 * neurons - 2)
 
 def hard_sigmoid(x, lower=0.0, upper=1.0, slope=0.2):
-    
+    """TODO"""
     # Calculate the range scaling
     range_scale = upper - lower
     
