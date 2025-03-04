@@ -7,10 +7,12 @@ from model._network import Network
 from util.config import Config
 
 class FullyConnectedNetwork(Network):
+    """
+    Class used to create an instance of a Network which is structured in layers, and each node from each 
+    layer has an edge connecting it to every node of the subsequent layer.
+    """
     def __init__(self, config: Config, layer_shapes=None, pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
-        """Initializes an instance of a fully connected network -- a network object which is structured
-        in layers, and each node from each layer has an edge connecting it to every node of the subsequent
-        layer.
+        """Initializes an instance of a FullyConnectedNetwork
         """
         if layer_shapes is None:
             layer_shapes = config.model['layers']
@@ -24,6 +26,9 @@ class FullyConnectedNetwork(Network):
         self.batch_size = config.training['batch_size']
         super().__init__(config, num_neurons, batch_size=self.batch_size)
         self._init_edges()
+
+        self._weights = torch.nn.Parameter(self._weights)
+        self._biases = torch.nn.Parameter(self._biases)
         
         self.free_layers = list(range(1,self.num_layers))
     

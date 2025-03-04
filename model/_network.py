@@ -8,8 +8,10 @@ class Network(ABC):
         """
         self.config = config
         self._state = torch.zeros(batch_size, num_neurons, device=config.device)
-        self._weights = torch.nn.Parameter(torch.zeros((num_neurons, num_neurons), device=config.device))
-        self._biases = torch.nn.Parameter(torch.zeros(num_neurons, device=config.device))
+        self._weights = torch.zeros((num_neurons, num_neurons), device=config.device)
+        self._biases = torch.zeros(num_neurons, device=config.device)
+        # self._weights = torch.nn.Parameter(torch.zeros((num_neurons, num_neurons), device=config.device))
+        # self._biases = torch.nn.Parameter(torch.zeros(num_neurons, device=config.device))
         self.activation = config.model['activation']
 
     @property
