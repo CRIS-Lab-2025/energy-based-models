@@ -12,8 +12,6 @@ class FullyConnectedNetwork(Network):
     layer has an edge connecting it to every node of the subsequent layer.
     """
     def __init__(self, config: Config, layer_shapes=None, pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
-        """Initializes an instance of a FullyConnectedNetwork
-        """
         if layer_shapes is None:
             layer_shapes = config.model['layers']
         num_neurons = sum(layer_shapes)
@@ -26,9 +24,6 @@ class FullyConnectedNetwork(Network):
         self.batch_size = config.training['batch_size']
         super().__init__(config, num_neurons, batch_size=self.batch_size)
         self._init_edges()
-
-        self._weights = torch.nn.Parameter(self._weights)
-        self._biases = torch.nn.Parameter(self._biases)
         
         self.free_layers = list(range(1,self.num_layers))
     
