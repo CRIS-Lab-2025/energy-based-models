@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import random
+import torch
 from core.activation import get_activation_neuron
 class Updater(ABC):
     # TODO
@@ -65,9 +66,27 @@ class FixedPointUpdater(Updater):
 
                 # pass through activation function
                 grad = get_activation_neuron(self.network.activation,grad)
+
+                # if node == 2:
+                #     print(f"Raw Energy Gradient at S[2] (Before Clamping): {grad}")
+
+
+                if torch.isnan(grad).any():
+                    print(f"NaN detected in grad at node {node}!")
+                    raise ValueError("NaN detected in gradient computation.")
+
+                if torch.isnan(S).any():
+                    print("NaN detected in S before update!")
+                    raise ValueError("NaN detected in state S.")
                 
-                # update the state
-                S[:,node] = grad
+                # if node == 2:
+                #     print(f"Before update - Node {node}: Grad = {grad}")
+
+
+                
+                learning_rate = 0.1  # Adjust if needed
+                S[:, node] += learning_rate * grad  # Gradual accumulation
+
    
         return S
         

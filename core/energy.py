@@ -23,7 +23,7 @@ class HopfieldEnergy(EnergyFunction):
         super().__init__()
 
 
-    def energy(self, W, S):
+    def energy(self, W, S, bias):
 
         # Compute the energy of the state S given the weight matrix W.
         # The energy is defined as:

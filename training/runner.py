@@ -144,17 +144,19 @@ class Runner:
             # print(inference_results[0])
             # print(ground_truth)
 
-            it = 0 ;
+            it = 0
             for S in inference_results:
-                Sp = S[0][-2:].detach().numpy()
-                predicted_labels = np.argmax(Sp) # Assuming classification task
+                Sp = S[0].detach().numpy()
+                flag = int(Sp[-1] > 0.5)  # Thresholding the last element (flag)
+                predicted_labels = flag  # Since it's a binary classification, use flag directly
                 target_labels = int(ground_truth[it])  # Define a method to get inference labels
-                # print(predicted_labels, target_labels)
-                it = it + 1;
-                correct_predictions += (predicted_labels == target_labels).sum().item()
-                total_predictions +=1
+
+                correct_predictions += (predicted_labels == target_labels)
+                total_predictions += 1
+                it += 1
 
             accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0.0
+
 
 
             # Compute a dummy metric (for example, the mean of S) to decide on best model.

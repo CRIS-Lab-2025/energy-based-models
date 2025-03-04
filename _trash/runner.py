@@ -190,12 +190,12 @@ def train(config):
             # Save model checkpoint at specified intervals
             if epoch % config['checkpoint_epoch'] == 0:
                 checkpoint_path = os.path.join(config['model_path'], f'epoch_{epoch}.pth')
-                torch.save(detection_model.state_dict(), checkpoint_path)
+                # torch.save(detection_model.state_dict(), checkpoint_path)
 
             # Save best model based on accuracy
             if epoch_accuracy > best_accuracy:
                 best_accuracy = epoch_accuracy
-                torch.save(detection_model.state_dict(), config['best_model_path'])
+                # torch.save(detection_model.state_dict(), config['best_model_path'])
 
         # Finish wandb run
         if config['wandb']:
