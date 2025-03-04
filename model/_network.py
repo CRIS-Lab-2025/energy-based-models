@@ -5,6 +5,8 @@ from util.config import Config
 class Network(ABC):
     def __init__(self, config: Config, num_neurons, batch_size, activation='hard_sigmoid'):
         self.config = config
+        self.num_neurons = num_neurons
+        self.batch_size = batch_size
         self._state = torch.zeros(batch_size, num_neurons, device=config.device)
         self._weights = torch.zeros((num_neurons, num_neurons), device=config.device)
         self._biases = torch.zeros(num_neurons, device=config.device)
@@ -27,6 +29,14 @@ class Network(ABC):
         in the given tensor.
         """
         self.state[:input.shape[0]] = input
+
+    def _reset_state(self):
+        """Reset the network state to all zeros."""
+        self._state = torch.zeros_like(self._state)
+
+    def clamp_weights(self):
+        """Clamp the weights to the range [-0.32, 0.32]."""
+        self._weights = torch.clamp(self._weights, max=1, min=-1)
     
     def create_edge(self, pre_index, post_index, weight=1):
         """Create an edge initialized with the specified weight value.

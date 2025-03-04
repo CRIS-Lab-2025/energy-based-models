@@ -39,7 +39,7 @@ class FullyConnectedNetwork(Network):
             # do kaiming initialization
             nn.init.kaiming_normal_(self._weights[row_start:row_end, col_start:col_end], a=weight_gains[layer])
 
-            self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.95)
+            self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.32, min=-0.32)
         
     
     def _layer_start(self, l):

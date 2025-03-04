@@ -81,6 +81,7 @@ class Runner:
         """
         # Get original parameters
         W, B = self._network.weights, self._network.biases
+        # self._network._reset_state()
         # Expand without detaching/cloning so gradients can flow back:
         W_expanded = W.unsqueeze(0).expand(self._config.training['batch_size'], *W.shape)
         B_expanded = B.unsqueeze(0).expand(self._config.training['batch_size'], *B.shape)
@@ -101,6 +102,7 @@ class Runner:
             output = S[:,self._network.layers[-1]].clone()
             outputs.append(output)
             targets.append(target)
+        self._network.clamp_weights()
         return outputs, targets
 
     def inference_epoch(self):
