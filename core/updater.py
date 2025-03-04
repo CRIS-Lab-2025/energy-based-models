@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 import random
 from core.activation import get_activation_neuron
-from model._network import Network
+from model.fully_connected_network import FullyConnectedNetwork
 from util.config import Config
+from core.energy import EnergyFunction
+from training.cost import SquaredError
+
 class Updater(ABC):
     # TODO
     def __init__(self):
@@ -22,8 +25,8 @@ class Updater(ABC):
 
 
 class FixedPointUpdater(Updater):
-
-    def __init__(self, network: Network, energy_fn, cost_fn, config: Config):
+    """TODO: Header comment"""
+    def __init__(self, network: FullyConnectedNetwork, energy_fn: EnergyFunction, cost_fn: SquaredError, config: Config):
         super().__init__()
         self.network = network
         self.energy_fn = energy_fn
