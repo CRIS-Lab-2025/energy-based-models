@@ -8,6 +8,10 @@ from util.config import Config
 
 class FullyConnectedNetwork(Network):
     def __init__(self, config: Config, layer_shapes=None, pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
+        """Initializes an instance of a fully connected network -- a network object which is structured
+        in layers, and each node from each layer has an edge connecting it to every node of the subsequent
+        layer.
+        """
         if layer_shapes is None:
             layer_shapes = config.model['layers']
         num_neurons = sum(layer_shapes)

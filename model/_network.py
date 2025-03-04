@@ -4,6 +4,8 @@ from util.config import Config
 
 class Network(ABC):
     def __init__(self, config: Config, num_neurons, batch_size):
+        """Initializes an instance of a Network object.
+        """
         self.config = config
         self._state = torch.zeros(batch_size, num_neurons, device=config.device)
         self._weights = torch.nn.Parameter(torch.zeros((num_neurons, num_neurons), device=config.device))
