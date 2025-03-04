@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import random
 from core.activation import get_activation_neuron
+from model._network import Network
+from util.config import Config
 class Updater(ABC):
     # TODO
     def __init__(self):
@@ -21,7 +23,7 @@ class Updater(ABC):
 
 class FixedPointUpdater(Updater):
 
-    def __init__(self, network, energy_fn, cost_fn, config):
+    def __init__(self, network: Network, energy_fn, cost_fn, config: Config):
         super().__init__()
         self.network = network
         self.energy_fn = energy_fn
@@ -32,7 +34,7 @@ class FixedPointUpdater(Updater):
         self._update_order()
 
     def _update_order(self):
-        
+        """TODO"""
         # determine the order in which to update the nodes
         self.update_order = []
         if self.order == 'synchronous':
@@ -46,6 +48,7 @@ class FixedPointUpdater(Updater):
             raise ValueError("Invalid update order")
 
     def step(self, S, W, B, target=None, nudging=0):
+        """TODO"""
         for layer in self.update_order:
             for node in self.network.layers[layer]:
                 # compute the gradient for the node
@@ -63,8 +66,8 @@ class FixedPointUpdater(Updater):
         return S
         
 
-    def compute_equilibrium(self, S, W,B,target,nudging=0):
-        
+    def compute_equilibrium(self, S, W, B, target, nudging=0):
+        """TODO"""
         # iterate for a fixed number of steps to reach equilibrium
         for i in range(self.iterations):
             S = self.step(S,W,B,target,nudging)

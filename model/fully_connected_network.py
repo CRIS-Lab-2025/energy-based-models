@@ -6,29 +6,30 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model._network import Network
 
 class FullyConnectedNetwork(Network):
+    """TODO: Class description"""
     def __init__(self, config, layer_shapes=None, activation='hard-sigmoid', pool_type='conv_max_pool', weight_gains=[0.6, 0.6, 1.5]):
         if layer_shapes is None:
             layer_shapes = config.model['layers']
         num_neurons = sum(layer_shapes)
+
         self._layer_shapes = layer_shapes
         self.input_shape = layer_shapes[0]
         self.num_layers = len(layer_shapes)
         self.layers = [range(self._layer_start(l),self._layer_end(l)) for l in range(self.num_layers)]
-        activation = config.model['activation']
+
         self.batch_size = config.training['batch_size']
-        super().__init__(config, num_neurons,batch_size=self.batch_size, activation=activation)
+        super().__init__(config, num_neurons,batch_size=self.batch_size)
         self._init_edges()
-        self._weights = torch.nn.Parameter(self._weights)
-        self._biases = torch.nn.Parameter(self._biases)
         self.free_layers = list(range(1,self.num_layers))
-        # TODO: after initializing the weights convert to nn.Parameter
     
     def _init_edges(self):
         """Create an edge from each node of each layer to each node of the subsequent layer.  
         """
         for input_index in range(self._layer_shapes[0]): 
             # ensure inputs don't change
-            self._weights[input_index,input_index]=1
+            with torch.no_grad():
+                self._weights[input_index,input_index]=1
+
         weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)])
         for layer in range(self.num_layers-1):
             # create edges from each layer to the next
@@ -39,7 +40,8 @@ class FullyConnectedNetwork(Network):
             # do kaiming initialization
             nn.init.kaiming_normal_(self._weights[row_start:row_end, col_start:col_end], a=weight_gains[layer])
 
-            self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.32, min=-0.32)
+            with torch.no_grad():
+                self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.32, min=-0.32)
         
     
     def _layer_start(self, l):
