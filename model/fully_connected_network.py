@@ -26,9 +26,11 @@ class FullyConnectedNetwork(Network):
     def _init_edges(self):
         """Create an edge from each node of each layer to each node of the subsequent layer.  
         """
-        for input_index in range(self._layer_shapes[0]): 
-            # ensure inputs don't change
-            self._weights[input_index,input_index]=1
+        with torch.no_grad():
+            for input_index in range(self._layer_shapes[0]): 
+                # ensure inputs don't change
+                self._weights[input_index, input_index] = 1
+
         weight_gains = np.sqrt([2.0 / (self._layer_shapes[i]) for i in range(self.num_layers-1)])
         for layer in range(self.num_layers-1):
             # create edges from each layer to the next
@@ -38,9 +40,12 @@ class FullyConnectedNetwork(Network):
             row_end = self._layer_end(layer+1)
             # do kaiming initialization
             nn.init.kaiming_normal_(self._weights[row_start:row_end, col_start:col_end], a=weight_gains[layer])
+            
+            with torch.no_grad():
+                self._weights[row_start:row_end, col_start:col_end] = torch.clamp(
+                    self._weights[row_start:row_end, col_start:col_end], max=0.95
+    )
 
-            self._weights[row_start:row_end, col_start:col_end] = torch.clamp(self._weights[row_start:row_end, col_start:col_end], max=0.95)
-        
     
     def _layer_start(self, l):
         """Returns the index of the first element in the specified layer.
