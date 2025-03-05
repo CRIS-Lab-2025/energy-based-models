@@ -56,13 +56,14 @@ class EquilibriumProp():
         Returns:
             param_grads: list of Tensor of shape param_shape and type float32. The parameter gradients
         """
+        S_copy = S.clone()
         # First phase: compute the first equilibrium state of the layers
         first_S = self.updater.compute_equilibrium(S,W,B, target, self._first_nudging)
         
-        # Reset State before second equilibrium
-        self.network._reset_state()
+        # # Reset State before second equilibrium
+        # self.network._reset_state()
         # Second phase: compute the second equilibrium state of the layers
-        second_S = self.updater.compute_equilibrium(S,W,B, target, self._second_nudging)
+        second_S = self.updater.compute_equilibrium(S_copy,W,B, target, self._second_nudging)
 
         # Compute the parameter gradients with either the standard EquilibriumProp formula, or the alternative EquilibriumProp formula
         weight_grads, bias_grads = self._standard_param_grads(first_S, second_S, W, B)

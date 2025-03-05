@@ -67,6 +67,20 @@ class Runner:
         # For tracking the best metric (assumed to be higher is better).
         self._best_metric = -float('inf')
 
+    def metrics(self, outputs, targets):
+        if self._config.model['layers'][self._config.model['output_layer']] > 1:
+                outputs = torch.cat(outputs).argmax(dim=1)
+        else:
+            outputs = torch.cat(outputs)
+            # if value is greater than 0.5, set to 1, else 0
+            outputs = (outputs > 0.5).float().flatten()
+        targets = torch.cat(targets)
+        # Calculate accuracy
+        correct = (outputs == targets).sum().item()
+        total = len(targets)
+        metric = correct / total
+        return metric
+
     def training_epoch(self):
         """
         Performs one epoch of training.
@@ -98,11 +112,13 @@ class Runner:
             # Assign gradients to the original parameters.
             # print(W)
             W.grad, B.grad = weight_grads, bias_grads
+            #torch.nn.utils.clip_grad_norm_(W, 1.0)
             self._optimizer.step()
             output = S[:,self._network.layers[-1]].clone()
             outputs.append(output)
             targets.append(target)
         self._network.clamp_weights()
+        metric = self.metrics(outputs, targets)
         return outputs, targets
 
     def inference_epoch(self):
