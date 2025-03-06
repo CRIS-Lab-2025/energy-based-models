@@ -89,19 +89,33 @@ class Runner:
         targets = []
         for x, target in tqdm(self._dataloader, desc="Training Batches"):
             self._optimizer.zero_grad()
-            S = self._network.set_input(x)
+            S_result = self._network.set_input(x)
+            
+            # Handle the case where set_input returns a tuple (state, weights)
+            if isinstance(S_result, tuple):
+                S = S_result[0]
+            else:
+                S = S_result
             
             # Let the network settle to equilibrium.
             S = self._updater.compute_equilibrium(S, W_expanded, B_expanded, target)
             # Compute parameter gradients.
             weight_grads, bias_grads = self._differentiator.compute_gradient(S, W_expanded, B_expanded, target)
             # Assign gradients to the original parameters.
-            # print(W)
             W.grad, B.grad = weight_grads, bias_grads
             self._optimizer.step()
-            output = S[:,self._network.layers[-1]].clone()
+            
+            # Handle different network types for output extraction
+            if hasattr(self._network, '_conv_weights'):
+                # For convolutional networks, use the entire state as output
+                output = S.clone()
+            else:
+                # For fully connected networks, extract the output layer
+                output = S[:,self._network.layers[-1]].clone()
+                
             outputs.append(output)
             targets.append(target)
+            
         self._network.clamp_weights()
         return outputs, targets
 
@@ -142,48 +156,61 @@ class Runner:
         for epoch in range(self._epochs):
             print(f"Epoch: {epoch}")
             tracemalloc.start()
-            outputs,targets = self.training_epoch()
-            # Log metrics to wandb if enabled.
+            outputs, targets = self.training_epoch()
+            
             # Calculate accuracy
-            if self._config.model['layers'][self._config.model['output_layer']] > 1:
-                outputs = torch.cat(outputs).argmax(dim=1)
+            accuracy = 0.0
+            
+            # Handle different network types for accuracy calculation
+            if hasattr(self._network, '_conv_weights'):
+                # For convolutional networks
+                all_outputs = torch.cat([o.view(o.size(0), -1) for o in outputs])
+                all_targets = torch.cat(targets)
+                
+                # If targets are class indices, convert outputs to predictions
+                if len(all_targets.shape) == 1:
+                    # Get the channel with the highest average activation for each sample
+                    predictions = all_outputs.mean(dim=2).mean(dim=2).argmax(dim=1)
+                    accuracy = (predictions == all_targets).float().mean().item()
+                else:
+                    # If targets are one-hot encoded, compare directly
+                    predictions = all_outputs.mean(dim=2).mean(dim=2).argmax(dim=1)
+                    target_classes = all_targets.argmax(dim=1)
+                    accuracy = (predictions == target_classes).float().mean().item()
             else:
-                outputs = torch.cat(outputs)
-                # if value is greater than 0.5, set to 1, else 0
-                outputs = (outputs > 0.5).float().flatten()
-            targets = torch.cat(targets)
-            # Calculate accuracy
-            correct = (outputs == targets).sum().item()
-            total = len(targets)
-            metric = correct / total
-
-            snapshot = tracemalloc.take_snapshot()
-
-            top_stats = snapshot.statistics('lineno')  
-
-            #print(top_stats)  # Shows detailed information about memory allocations
-
-            tracemalloc.stop()
-            print(f"Accuracy: {metric:.4f}")
+                # For fully connected networks
+                if self._config.model['layers'][self._config.model['output_layer']] > 1:
+                    # Multi-class classification
+                    all_outputs = torch.cat(outputs).argmax(dim=1)
+                    all_targets = torch.cat(targets).argmax(dim=1)
+                else:
+                    # Binary classification
+                    all_outputs = (torch.cat(outputs) > 0.5).float()
+                    all_targets = torch.cat(targets)
+                
+                accuracy = (all_outputs == all_targets).float().mean().item()
+            
+            print(f"Accuracy: {accuracy:.4f}")
+            
+            # Log metrics to wandb if enabled
             if self._use_wandb:
                 wandb.log({
-                    "Epoch": epoch,
-                    "Metric": metric,
+                    'epoch': epoch,
+                    'accuracy': accuracy,
+                    'memory': tracemalloc.get_traced_memory()[0]
                 })
-
-            # Log to file if enabled.
-            if self._log:
-                logging.info(f"Epoch: {epoch}, Metric: {metric:.4f}")
-
-            # Save a checkpoint every checkpoint_epoch.
-            # if epoch % self._checkpoint_epoch == 0:
-            #     checkpoint_path = os.path.join(self._model_path, f'epoch_{epoch}.pth')
-            #     torch.save(self._network.state_dict(), checkpoint_path)
-
-            # # Save the best model if the metric improves.
-            # if metric > self._best_metric:
-            #     self._best_metric = metric
-            #     torch.save(self._network.state_dict(), self._best_model_path)
+            
+            # Save checkpoint if at checkpoint interval
+            if self._checkpoint_epoch > 0 and (epoch + 1) % self._checkpoint_epoch == 0:
+                checkpoint_path = os.path.join(self._model_path, f'checkpoint_epoch_{epoch+1}.pth')
+                torch.save(self._network.state_dict(), checkpoint_path)
+                
+            # Save best model if accuracy improved
+            if accuracy > self._best_metric:
+                self._best_metric = accuracy
+                torch.save(self._network.state_dict(), self._best_model_path)
+                
+            tracemalloc.stop()
 
         if self._use_wandb:
             wandb.finish()

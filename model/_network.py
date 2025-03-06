@@ -8,9 +8,9 @@ class Network(ABC):
         self.config = config
         self.num_neurons = num_neurons
         self.batch_size = batch_size
-        self._state = torch.zeros(batch_size, num_neurons, device=config.device)
-        self._weights = torch.nn.Parameter(torch.zeros((num_neurons, num_neurons), device=config.device))
-        self._biases = torch.nn.Parameter(torch.zeros(num_neurons, device=config.device))
+        self._state = self.config.to_device(torch.zeros(batch_size, num_neurons))
+        self._weights = torch.nn.Parameter(self.config.to_device(torch.zeros((num_neurons, num_neurons))))
+        self._biases = torch.nn.Parameter(self.config.to_device(torch.zeros(num_neurons)))
         self.activation = config.model['activation']
 
     @property
@@ -28,7 +28,11 @@ class Network(ABC):
     def set_input(self, input: torch.Tensor):
         """Update the network state by setting the input to the values 
         in the given tensor.
+        
+        Args:
+            input: Tensor of shape (batch_size, input_size)
         """
+        input = self.config.to_device(input)
         self.state[:input.shape[0]] = input
 
     def _reset_state(self):

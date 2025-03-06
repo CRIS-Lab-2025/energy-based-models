@@ -42,8 +42,8 @@ class EquilibriumProp():
         _,[weight_grads_second,bias_grads_second]= self.energy_fn.full_gradient(second_S, W, B)
 
         # Compute the parameter gradients
-        weight_grads = weight_grads_second - weight_grads_first / (self._second_nudging - self._first_nudging)
-        bias_grads = bias_grads_second - bias_grads_first / (self._second_nudging - self._first_nudging)
+        weight_grads = (weight_grads_second - weight_grads_first) / (self._second_nudging - self._first_nudging)
+        bias_grads = (bias_grads_second - bias_grads_first) / (self._second_nudging - self._first_nudging)
 
         return weight_grads, bias_grads
     

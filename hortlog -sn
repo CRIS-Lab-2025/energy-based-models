@@ -1,0 +1,7 @@
+[33mcommit 1f8b2e076bb9a7bbaa459dfc3f44a4f945f1f31f[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: hanita <hhaller@wisc.edu>
+Date:   Mon Mar 3 22:20:33 2025 -0500
+
+    save
+
+model/fully_connected_network.py

@@ -47,13 +47,21 @@ from training.cost import SquaredError
 from training.equilibrium_propagation import EquilibriumProp
 from util.config import Config
 
+# Create a custom config to disable wandb
 config = Config()
+# Set a local path for results to avoid permission errors
+config.path = "./results"
+config.training["wandb"] = False
+config.training["tensorboard"] = False
+config.training["save_model"] = False
+config.training["log"] = False
+
 network = FullyConnectedNetwork(config)
 energy_fn = HopfieldEnergy(config)
 cost_fn = SquaredError(config)
 updater = FixedPointUpdater(network, energy_fn, cost_fn, config)
 W, B = network.weights, network.biases
-optimizer = torch.optim.SGD([W, B], lr=0.001)
+optimizer = torch.optim.SGD([W, B], lr=0.0001)
 differentiator = EquilibriumProp(network, energy_fn, cost_fn, updater, config, optimizer)
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.training["batch_size"], shuffle=True, drop_last=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.training["batch_size"], shuffle=True)
