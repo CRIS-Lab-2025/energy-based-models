@@ -1,74 +1,44 @@
-import os
-import pickle
 import numpy as np
 import torch
 import torch.nn.functional as F
-from external_world import ExternalWorld
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+import networkx as nx
+import pickle
 
 def pi(s):
     return torch.clamp(s, 0.0, 1.0)
 
 class Network:
-    def __init__(self, name, hyperparameters={}):
+    def __init__(self, name, external_world, hyperparameters={}):
         self.path = name + ".save"
-        self.biases, self.weights, self.hyperparameters, self.training_curves = self.__load_params(hyperparameters)
-        
-        # LOAD EXTERNAL WORLD (=DATA)
-        self.external_world = ExternalWorld()
-        
-        # INITIALIZE PERSISTENT PARTICLES for each non-input layer
-        dataset_size = self.external_world.size_dataset
-        layer_sizes = [28 * 28] + self.hyperparameters["hidden_sizes"] + [10]
-        self.persistent_particles = [
-            torch.zeros((dataset_size, size), dtype=torch.float32)
-            for size in layer_sizes[1:]
-        ]
-        
-        self.batch_size = self.hyperparameters["batch_size"]
+        self.external_world = external_world
+        self.hyperparameters = hyperparameters
+
+        input_size = external_world.x.shape[1]
+        output_size = hyperparameters.get("output_size", len(torch.unique(external_world.y)))
+        layer_sizes = [input_size] + hyperparameters["hidden_sizes"] + [output_size]
+
+        self.biases, self.weights, self.training_curves = self._initialize_params(layer_sizes)
+        self.batch_size = hyperparameters["batch_size"]
+        self.dataset_size = external_world.size_dataset
+        self.persistent_particles = [torch.zeros((self.dataset_size, size)) for size in layer_sizes[1:]]
         self.index = 0
-        self.update_mini_batch_index(self.index)
-    
+
+    def _initialize_params(self, layer_sizes):
+        biases = [torch.zeros(size) for size in layer_sizes]
+        weights = [torch.tensor(np.random.uniform(-np.sqrt(6 / (n_in + n_out)), 
+                        np.sqrt(6 / (n_in + n_out)), (n_in, n_out)), dtype=torch.float32)
+                   for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:])]
+        return biases, weights, {"training error": [], "validation error": []}
+
     def update_mini_batch_index(self, index):
-        """Update the mini-batch index and slice the external data and persistent particles."""
-        self.index = index
-        start = index * self.batch_size
-        end = (index + 1) * self.batch_size
-        self.x_data = self.external_world.x[start:end]
-        self.y_data = self.external_world.y[start:end]
-        self.y_data_one_hot = F.one_hot(self.y_data, num_classes=10).float()
-        # Layers: first layer is the clamped input, then one slice per persistent particle.
+        start, end = index * self.batch_size, (index + 1) * self.batch_size
+        self.x_data, self.y_data = self.external_world.x[start:end], self.external_world.y[start:end]
+        output_size = self.hyperparameters["output_size"]
+        self.y_data_one_hot = F.one_hot(self.y_data, num_classes=output_size).float()
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
-    
-    def save_params(self):
-        biases_values = [b.detach().numpy() for b in self.biases]
-        weights_values = [W.detach().numpy() for W in self.weights]
-        to_dump = (biases_values, weights_values, self.hyperparameters, self.training_curves)
-        with open(self.path, "wb") as f:
-            pickle.dump(to_dump, f, protocol=pickle.HIGHEST_PROTOCOL)
-    
-    def __load_params(self, hyperparameters):
-        hyper = hyperparameters.copy()
-        if os.path.isfile(self.path):
-            with open(self.path, "rb") as f:
-                biases_values, weights_values, saved_hyper, training_curves = pickle.load(f)
-            saved_hyper.update(hyper)
-            hyper = saved_hyper
-        else:
-            layer_sizes = [28 * 28] + hyper["hidden_sizes"] + [10]
-            biases_values = [np.zeros((size,), dtype=np.float32) for size in layer_sizes]
-            weights_values = []
-            # Glorot/Bengio weight initialization for each layer.
-            for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:]):
-                limit = np.sqrt(6.0 / (n_in + n_out))
-                W = np.random.uniform(low=-limit, high=limit, size=(n_in, n_out)).astype(np.float32)
-                weights_values.append(W)
-            training_curves = {"training error": [], "validation error": []}
-        
-        # Convert loaded parameters to torch tensors.
-        biases = [torch.tensor(b, dtype=torch.float32) for b in biases_values]
-        weights = [torch.tensor(W, dtype=torch.float32) for W in weights_values]
-        return biases, weights, hyper, training_curves
-    
+
     def energy(self, layers):
         # Compute the energy function E for the current layers.
         # squared_norm: for each layer, sum of squares of each row, then sum over layers.
@@ -143,3 +113,38 @@ class Network:
         # Update weights for each connection.
         for i, delta in enumerate(Delta_layers):
             self.weights[i] = self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size
+
+
+    def save_params(self):
+        biases_values = [b.detach().numpy() for b in self.biases]
+        weights_values = [W.detach().numpy() for W in self.weights]
+        to_dump = (biases_values, weights_values, self.hyperparameters, self.training_curves)
+        with open(self.path, "wb") as f:
+            pickle.dump(to_dump, f, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    def __load_params(self, hyperparameters):
+        hyper = hyperparameters.copy()
+        if os.path.isfile(self.path):
+            with open(self.path, "rb") as f:
+                biases_values, weights_values, saved_hyper, training_curves = pickle.load(f)
+            saved_hyper.update(hyper)
+            hyper = saved_hyper
+        else:
+            layer_sizes = [28 * 28] + hyper["hidden_sizes"] + [10]
+            biases_values = [np.zeros((size,), dtype=np.float32) for size in layer_sizes]
+            weights_values = []
+            # Glorot/Bengio weight initialization for each layer.
+            for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:]):
+                limit = np.sqrt(6.0 / (n_in + n_out))
+                W = np.random.uniform(low=-limit, high=limit, size=(n_in, n_out)).astype(np.float32)
+                weights_values.append(W)
+            training_curves = {"training error": [], "validation error": []}
+        
+        # Convert loaded parameters to torch tensors.
+        biases = [torch.tensor(b, dtype=torch.float32) for b in biases_values]
+        weights = [torch.tensor(W, dtype=torch.float32) for W in weights_values]
+        return biases, weights, hyper, training_curves
+
+
+
+

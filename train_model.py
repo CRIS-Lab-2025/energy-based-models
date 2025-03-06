@@ -1,102 +1,139 @@
-import time
+import os
+import gzip
+import pickle
 import numpy as np
+import torch
+from urllib.request import urlretrieve
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 from model import Network
+import networkx as nx
 
-def train_net(net):
-    path         = net.path
-    hidden_sizes = net.hyperparameters["hidden_sizes"]
-    n_epochs     = net.hyperparameters["n_epochs"]
-    batch_size   = net.hyperparameters["batch_size"]
-    n_it_neg     = net.hyperparameters["n_it_neg"]
-    n_it_pos     = net.hyperparameters["n_it_pos"]
-    alphas       = net.hyperparameters["alphas"]
 
-    print(f"name = {path}")
-    arch = "784-" + "-".join(str(n) for n in hidden_sizes) + "-10"
-    print(f"architecture = {arch}")
-    print(f"number of epochs = {n_epochs}")
-    print(f"batch_size = {batch_size}")
-    print(f"n_it_neg = {n_it_neg}")
-    print(f"n_it_pos = {n_it_pos}")
-    learning_rates_str = " ".join([f"alpha_W{i+1}={alpha:.3f}" for i, alpha in enumerate(alphas)])
-    print("learning rates: " + learning_rates_str + "\n")
+class ExternalWorld:
+    def __init__(self):
+        path = os.path.join(os.getcwd(), "mnist.pkl.gz")
+        if not os.path.isfile(path):
+            urlretrieve("http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz", path)
+        with gzip.open(path, "rb") as f:
+            train, valid, test = pickle.load(f, encoding="latin1")
+        self.x = torch.tensor(np.vstack((train[0], valid[0], test[0])), dtype=torch.float32)
+        self.y = torch.tensor(np.hstack((train[1], valid[1], test[1])), dtype=torch.int64)
+        self.size_dataset = len(self.x)
 
-    n_batches_train = 50000 // batch_size
-    n_batches_valid = 10000 // batch_size
 
-    start_time = time.time()
 
-    for epoch in range(n_epochs):
 
-        # --- TRAINING ---
-        measures_sum = [0.0, 0.0, 0.0]
-        for index in range(n_batches_train):
-            net.update_mini_batch_index(index)
+def plot_network_structure(net):
+    G = nx.DiGraph()
+    layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
-            # Negative phase: relax the network.
-            net.negative_phase(n_it_neg)
+    # Add nodes explicitly with subset attribute
+    for layer_idx, layer_label in enumerate(layer_labels):
+        layer_size = net.weights[0].shape[0] if layer_idx == 0 else net.weights[layer_idx - 1].shape[1]
+        for neuron_idx in range(layer_size):
+            G.add_node((layer_label, neuron_idx), subset=layer_idx)
 
-            # Measure energy, cost and error.
-            measures = net.measure()
-            measures_sum = [ms + m for ms, m in zip(measures_sum, measures)]
-            measures_avg = [ms / (index + 1) for ms in measures_sum]
-            measures_avg[-1] *= 100.0  # convert error rate to percentage
-            print(f"\r{epoch:2d}-train-{(index+1)*batch_size:5d} "
-                  f"E={measures_avg[0]:.1f} C={measures_avg[1]:.5f} error={measures_avg[2]:.3f}%", end="")
+    # Add edges
+    for idx, W in enumerate(net.weights):
+        for i in range(W.shape[0]):
+            for j in range(W.shape[1]):
+                G.add_edge((layer_labels[idx], i), (layer_labels[idx + 1], j))
 
-            # Positive phase: backprop-like relaxation and parameter update.
-            net.positive_phase(n_it_pos, *alphas)
-        print("")
-        net.training_curves["training error"].append(measures_avg[-1])
+    pos = nx.multipartite_layout(G)
+    plt.figure(figsize=(10, 6))
+    nx.draw(G, pos, with_labels=False, node_size=50, arrowsize=5)
+    plt.title("Network Structure")
+    plt.show()
 
-        # --- VALIDATION ---
-        measures_sum = [0.0, 0.0, 0.0]
-        for index in range(n_batches_valid):
-            net.update_mini_batch_index(n_batches_train + index)
-            net.negative_phase(n_it_neg)
-            measures = net.measure()
-            measures_sum = [ms + m for ms, m in zip(measures_sum, measures)]
-            measures_avg = [ms / (index + 1) for ms in measures_sum]
-            measures_avg[-1] *= 100.0
-            print(f"\r   valid-{(index+1)*batch_size:5d} "
-                  f"E={measures_avg[0]:.1f} C={measures_avg[1]:.5f} error={measures_avg[2]:.2f}%", end="")
-        print("")
+def plot_network_weights(net, epoch):
+    G = nx.DiGraph()
+    layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
-        duration = (time.time() - start_time) / 60.0
-        print(f"   duration={duration:.1f} min")
+    for i, layer_size in enumerate([net.weights[0].shape[0]] + [w.shape[1] for w in net.weights]):
+        for n in range(layer_size):
+            G.add_node((layer_labels[i], n), subset=i)
 
-        # SAVE PARAMETERS AT THE END OF THE EPOCH
-        net.save_params()
+    for idx, W in enumerate(net.weights):
+        for i in range(W.shape[0]):
+            for j in range(W.shape[1]):
+                weight = W[i, j].item()
+                G.add_edge((layer_labels[idx], i), (layer_labels[idx+1], j), weight=weight)
 
-# --- HYPERPARAMETERS ---
+    pos = nx.multipartite_layout(G, subset_key='subset')
+    edge_weights = np.array([G[u][v]['weight'] for u, v in G.edges()])
 
-speed_net1 = ("speed_net1", {
-    "hidden_sizes": [500],
-    "n_epochs": 30,
-    "batch_size": 20,
-    "n_it_neg": 1,
-    "n_it_pos": 1,
-    "alphas": [np.float32(0.1), np.float32(0.05)]
-})
+    plt.figure(figsize=(5, 2))
+    
+    # Normalize edge colors and explicitly create a ScalarMappable
+    norm = plt.Normalize(vmin=-np.max(np.abs(edge_weights)), vmax=np.max(np.abs(edge_weights)))
+    cmap = plt.cm.RdYlGn
 
-speed_net2 = ("speed_net2", {
-    "hidden_sizes": [500, 500],
-    "n_epochs": 50,
-    "batch_size": 20,
-    "n_it_neg": 60,
-    "n_it_pos": 1,
-    "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)]
-})
+    edges = nx.draw_networkx_edges(G, pos, edge_color=edge_weights, edge_cmap=cmap, edge_vmin=norm.vmin, edge_vmax=norm.vmax, arrowsize=10)
+    nx.draw_networkx_nodes(G, pos, node_size=50, node_color='gray')
 
-speed_net3 = ("speed_net3", {
-    "hidden_sizes": [500, 500, 500],
-    "n_epochs": 150,
-    "batch_size": 20,
-    "n_it_neg": 400,
-    "n_it_pos": 1,
-    "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.015), np.float32(0.002)]
-})
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array(edge_weights)
+    plt.colorbar(sm, label='Weight magnitude', ax = plt.gca())
+
+    plt.title(f"Network Structure at Epoch {epoch}")
+    plt.axis('off')
+    plt.show()
+
+
+
+
+def train_net(net, plot_graph = False):
+    history = {"Energy": [], "Cost": [], "Error": []}
+    epochs, batch_size = net.hyperparameters["n_epochs"], net.hyperparameters["batch_size"]
+    n_batches = net.dataset_size // batch_size
+    n_it_neg, n_it_pos, alphas = net.hyperparameters["n_it_neg"], net.hyperparameters["n_it_pos"], net.hyperparameters["alphas"]
+
+
+    snapshot_epochs = np.linspace(0, epochs - 1, 5, dtype=int)
+    with tqdm(total=epochs, desc="Training Progress", unit="epoch") as epoch_bar:
+        for epoch in range(epochs):
+            for i in range(n_batches):
+                net.update_mini_batch_index(i)
+                net.negative_phase(n_it_neg)
+                net.positive_phase(n_it_pos, *alphas)
+
+            # Measure and log
+            E, C, error = net.measure()
+            history["Energy"].append(E)
+            history["Cost"].append(C)
+            history["Error"].append(error * 100)
+
+            # Update progress bar description instead of using set_postfix()
+            epoch_bar.set_description(f"Epoch {epoch+1}/{epochs} | E={E:.2f} C={C:.5f} Error={error*100:.2f}%")
+            epoch_bar.update(1)
+            if(plot_graph):
+                if epoch in snapshot_epochs:
+                    plot_network_weights(net, epoch)
+
+    # Plot results
+    fig, axes = plt.subplots(1, 3, figsize=(18, 4))
+    for ax, (key, color) in zip(axes, [("Energy", "blue"), ("Cost", "orange"), ("Error", "red")]):
+        ax.plot(history[key], label=key, color=color)
+        ax.set_title(f"{key} over Epochs")
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
-    net = Network(*speed_net1)
-    train_net(net)
+
+    # Initialize and train
+    train_net(Network("mnist", ExternalWorld(), {
+        "hidden_sizes": [500],
+        "n_epochs": 10,
+        "batch_size": 20,
+        "n_it_neg": 1,
+        "n_it_pos": 1,
+        "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)],
+        "output_size": 10,
+    }))
+
+
+
+
+
