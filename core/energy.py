@@ -52,7 +52,7 @@ class HopfieldEnergy(EnergyFunction):
             Tensor: Gradient of the energy function, with the same shape as `state`.
         """
         # Compute the bias term. If state is batched, bias will be broadcasted.
-        bias_grad = -state.mean(dim=0)
+        bias_grad = state.mean(dim=0)
 
         # For each node i, add contributions from both pre- and post-synaptic terms.
         # If state is 1D, torch.matmul treats it as a row vector.

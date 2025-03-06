@@ -71,17 +71,19 @@ class SquaredError(CostFunction):
         """
         
         # if more than one class, return the gradient for the class
-        if self._num_classes > 1:
-            output = grad
-            if mean:
-                output = grad.mean(dim=0)
-                target = target.mean(dim=0)
-            return output - target[:,class_id]
-        else:
-            output = grad
-            if mean:
-                output = grad.mean(dim=0)
-                target = target.mean(dim=0)
-            return target - output
+
+        return target - grad
+        # if self._num_classes > 1:
+        #     output = grad
+        #     # if mean:
+        #     #     output = grad.mean(dim=0)
+        #     #     target = target.mean(dim=0)
+        #     return output - target[:,class_id]
+        # else:
+        #     output = grad
+        #     # if mean:
+        #     #     output = grad.mean(dim=0)
+        #     #     target = target.mean(dim=0)
+        #     return target - output
            
         

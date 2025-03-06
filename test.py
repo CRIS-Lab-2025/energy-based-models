@@ -24,7 +24,7 @@ X2 = torch.stack([x2, y2, z2], dim=1)
 X = torch.cat([X1, X2], dim=0)
 
 # Labels for the rings
-Y1 = torch.zeros(num_points, dtype=torch.int32)
+Y1 = -torch.ones(num_points, dtype=torch.int32)
 Y2 = torch.ones(num_points, dtype=torch.int32)
 Y = torch.cat([Y1, Y2], dim=0)
 

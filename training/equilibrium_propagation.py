@@ -4,6 +4,10 @@ from core.updater import Updater
 from training.cost import CostFunction
 
 
+import logging
+
+
+
 class EquilibriumProp():
 
     def __init__(self,network, energy_fn: EnergyFunction, cost_fn: CostFunction, updater: Updater, config, optimizer):
@@ -57,11 +61,32 @@ class EquilibriumProp():
         Returns:
             param_grads: list of Tensor of shape param_shape and type float32. The parameter gradients
         """
+
+        S1 = S[:].clone()
+        W1 = W[:].clone()
+        B1 = B[:].clone()
+        target1 = target[:].clone()
+
+        S2 = S[:].clone()
+        W2 = W[:].clone()
+        B2 = B[:].clone()
+        target2 = target[:].clone()
+
+        # print("S", S)
+        # print("W", W)
+        # print("B", B)
+        # print("T", target)
+        # print("W last", W[-1][-1])
+
+        # print(target1)
+
         # First phase: compute the first equilibrium state of the layers
-        first_S = self.updater.compute_equilibrium(S,W,B, target, self._first_nudging)
+        first_S = self.updater.compute_equilibrium(S1,W1,B1, target1, self._first_nudging)
+
+        # print(target2)
         
         # Second phase: compute the second equilibrium state of the layers
-        second_S = self.updater.compute_equilibrium(S,W,B, target, self._second_nudging)
+        second_S = self.updater.compute_equilibrium(S2,W2,B2, target2, self._second_nudging)
 
         # Compute the parameter gradients with either the standard EquilibriumProp formula, or the alternative EquilibriumProp formula
         weight_grads, bias_grads = self._standard_param_grads(first_S, second_S, W, B)
@@ -80,6 +105,30 @@ class EquilibriumProp():
 
         weight_grads = weight_grads * clamped_weight_mask 
         bias_grads = bias_grads * clamped_bias_mask
+
+        # # Define how often to log (e.g., every 100 calls)
+        # LOG_EVERY_N = 100
+        # if not hasattr(self, "_gradient_log_counter"):
+        #     self._gradient_log_counter = 0  # Initialize counter
+
+        # self._gradient_log_counter += 1
+
+        # if self._gradient_log_counter % LOG_EVERY_N == 0:
+            # Compute norms of gradients for logging
+        # weight_grad_norm = weight_grads.norm().item()
+        # bias_grad_norm = bias_grads.norm().item()
+
+        # # Compute norms of equilibrium states
+        # first_S_norm = first_S.norm().item()
+        # second_S_norm = second_S.norm().item()
+
+        # print(
+        #     # f"[Gradient Logging] Iteration: {self._gradient_log_counter}, "
+        #     f"First Nudging: {self._first_nudging:.6f}, Second Nudging: {self._second_nudging:.6f}, "
+        #     f"Equilibrium Norms - First: {first_S_norm:.6f}, Second: {second_S_norm:.6f}, "
+        #     f"Gradient Norms - Weight: {weight_grad_norm:.6f}, Bias: {bias_grad_norm:.6f}"
+        # )
+
 
         return weight_grads, bias_grads
 

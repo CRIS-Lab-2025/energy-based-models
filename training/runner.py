@@ -4,6 +4,7 @@ import logging
 import torch
 from tqdm import tqdm
 import wandb
+import matplotlib.pyplot as plt
 
 
 
@@ -83,11 +84,17 @@ class Runner:
         W, B = self._network.weights, self._network.biases
         # self._network._reset_state()
         # Expand without detaching/cloning so gradients can flow back:
-        W_expanded = W.unsqueeze(0).expand(self._config.training['batch_size'], *W.shape)
-        B_expanded = B.unsqueeze(0).expand(self._config.training['batch_size'], *B.shape)
+
         outputs = []
         targets = []
+        inputs = []
         for x, target in tqdm(self._dataloader, desc="Training Batches"):
+
+            W_expanded = W.unsqueeze(0).expand(1, *W.shape)
+            B_expanded = B.unsqueeze(0).expand(1, *B.shape)
+
+            # print("shape")
+            # print(x.shape, target.shape)
             self._optimizer.zero_grad()
             S = self._network.set_input(x)
             
@@ -102,8 +109,10 @@ class Runner:
             output = S[:,self._network.layers[-1]].clone()
             outputs.append(output)
             targets.append(target)
+            # print(output, target)
+            inputs.append(x)
         self._network.clamp_weights()
-        return outputs, targets
+        return inputs, outputs, targets, W, B
 
     def inference_epoch(self):
         """
@@ -128,66 +137,58 @@ class Runner:
             targets.append(target)
         return outputs
 
+
     def run_training(self):
-        """
-        Runs the full training loop over epochs.
-        Logs metrics (dummy metric used here—you can replace with your own evaluation),
-        saves checkpoints at intervals, and saves the best model.
-        """
-        import tracemalloc
-         
-
-            
-
+        """Runs the full training loop over epochs with logging and side-by-side visualization."""
+        
         for epoch in range(self._epochs):
-            print(f"Epoch: {epoch}")
-            tracemalloc.start()
-            outputs,targets = self.training_epoch()
-            # Log metrics to wandb if enabled.
-            # Calculate accuracy
-            if self._config.model['layers'][self._config.model['output_layer']] > 1:
-                outputs = torch.cat(outputs).argmax(dim=1)
-            else:
-                outputs = torch.cat(outputs)
-                # if value is greater than 0.5, set to 1, else 0
-                outputs = (outputs > 0.5).float().flatten()
-            targets = torch.cat(targets)
-            # Calculate accuracy
-            correct = (outputs == targets).sum().item()
-            total = len(targets)
-            metric = correct / total
+            print(f"\nEpoch {epoch}")
+            
+            inputs, outputs, targets, W, B = self.training_epoch()
+            inputs = torch.cat(inputs).cpu().numpy()
+            targets = torch.cat(targets).cpu().numpy()
+            
+            outputs = torch.cat(outputs)
+            # if self._config.model['layers'][self._config.model['output_layer']] > 1:
+            #     outputs = outputs.argmax(dim=1)
+            # else:
+            outputs = (outputs > 0.5).float().flatten()
+            
+            outputs = outputs.cpu().numpy()
 
-            snapshot = tracemalloc.take_snapshot()
+            # Define consistent colors for 0 and 1
+            colors = {0.0: "red", 1.0: "green"}
+            pred_colors = [colors[val] for val in outputs]
+            target_colors = [colors[val] for val in targets]
 
-            top_stats = snapshot.statistics('lineno')  
+            # Side-by-side scatter plots
+            fig, axes = plt.subplots(1, 2, figsize=(6, 3), sharex=True, sharey=True)
 
-            #print(top_stats)  # Shows detailed information about memory allocations
+            axes[0].scatter(inputs[:, 0], inputs[:, 1], c=pred_colors, alpha=0.6, edgecolors='k')
+            axes[0].set_title("Predicted Labels")
+            axes[0].set_xlabel("Feature 1")
+            axes[0].set_ylabel("Feature 2")
 
-            tracemalloc.stop()
-            print(f"Accuracy: {metric:.4f}")
-            if self._use_wandb:
-                wandb.log({
-                    "Epoch": epoch,
-                    "Metric": metric,
-                })
+            axes[1].scatter(inputs[:, 0], inputs[:, 1], c=target_colors, alpha=0.6, edgecolors='k')
+            axes[1].set_title("Actual Labels")
+            axes[1].set_xlabel("Feature 1")
 
-            # Log to file if enabled.
+            plt.tight_layout()
+            plt.show()
+
+            print("W last", W[-1])
+
+            print("B", B)
+
+            # Compute accuracy
+            accuracy = (outputs == targets).mean()
+            print(f"Accuracy: {accuracy:.4f}")
+
             if self._log:
-                logging.info(f"Epoch: {epoch}, Metric: {metric:.4f}")
+                logging.info(f"Epoch {epoch}: Accuracy {accuracy:.4f}")
 
-            # Save a checkpoint every checkpoint_epoch.
-            # if epoch % self._checkpoint_epoch == 0:
-            #     checkpoint_path = os.path.join(self._model_path, f'epoch_{epoch}.pth')
-            #     torch.save(self._network.state_dict(), checkpoint_path)
-
-            # # Save the best model if the metric improves.
-            # if metric > self._best_metric:
-            #     self._best_metric = metric
-            #     torch.save(self._network.state_dict(), self._best_model_path)
-
-        if self._use_wandb:
-            wandb.finish()
         return self._best_metric
+
 
     def run_inference(self):
         """
