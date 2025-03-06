@@ -114,7 +114,7 @@ config = Config('simple_config.json')
 network_new = FullyConnectedNetwork(config)
 energy_fn_new = HopfieldEnergy(config)
 cost_fn_new = SquaredErrorNew(config)
-updater_new = FixedPointUpdaterNew(network, energy_fn, cost_fn, config)
+updater_new = FixedPointUpdaterNew(network_new, energy_fn_new, cost_fn_new, config)
 scheduler_new = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 W, B = network_new.weights, network_new.biases
 with torch.no_grad():
@@ -141,7 +141,7 @@ for x, y in train_loader:
 
             # Set the input and target
             S_new = network_new.set_input(x)
-            network.set_input(x, reset=False) 
+            network.set_input(x.to(torch.float32), reset=False) 
 
             # Compute Equilibrium
             S_new = updater_new.compute_equilibrium(S_new, W_expanded, B_expanded, y)
