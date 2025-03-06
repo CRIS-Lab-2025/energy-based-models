@@ -159,6 +159,7 @@ class Runner:
             print(f"Epoch: {epoch}")
             tracemalloc.start()
             outputs,targets = self.training_epoch()
+            self._scheduler.step()
             # Log metrics to wandb if enabled.
             # Calculate accuracy
             if self._config.model['layers'][self._config.model['output_layer']] > 1:

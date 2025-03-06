@@ -83,5 +83,4 @@ class EquilibriumProp():
         weight_grads = weight_grads * clamped_weight_mask 
         bias_grads = bias_grads * clamped_bias_mask
 
-        return weight_grads, bias_grads
-
+        return weight_grads, bias_grads, first_S, second_S
