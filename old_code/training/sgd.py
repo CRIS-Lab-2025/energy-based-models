@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from itertools import accumulate
 import torch
 
-from model.function.interaction import Function, SumSeparableFunction
-from model.minimizer.minimizer import ParamUpdater, GradientDescentUpdater
+from old_code.model.function.interaction import Function, SumSeparableFunction
+from old_code.model.minimizer.minimizer import ParamUpdater, GradientDescentUpdater
 
 
 
@@ -273,7 +273,7 @@ class EquilibriumProp(GradientEstimator):
         else:
             param_grads = self._standard_param_grads(layers_first, layers_second)
 
-        return param_grads + cost_grads, layers_first, layers_second
+        return param_grads + cost_grads
     
     def detailed_gradients(self, cumulative=True):
         """Compute and return the sequence of time-dependent layer- and parameter- EP gradients

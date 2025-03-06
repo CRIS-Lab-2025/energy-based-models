@@ -3,8 +3,8 @@ import numpy
 import torch
 import torch.nn.functional as F
 
-from model.function.interaction import Function, QFunction
-from model.variable.parameter import Bias, DenseWeight
+from old_code.model.function.interaction import Function, QFunction
+from old_code.model.variable.parameter import Bias, DenseWeight
 
 
 

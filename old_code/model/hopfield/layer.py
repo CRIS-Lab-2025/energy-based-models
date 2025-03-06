@@ -1,7 +1,7 @@
 from abc import ABC
 import torch
 
-from model.variable.layer import Layer
+from old_code.model.variable.layer import Layer
 
 
 class HardSigmoidLayer(Layer):

@@ -4,7 +4,7 @@ import time
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from training.statistics import Counter, ErrorFinder, EnergyStat, CostStat, ErrorStat, TopFiveErrorStat, ViolationStat, NormStat, SaturationStat, GradientStat
+from old_code.training.statistics import Counter, ErrorFinder, EnergyStat, CostStat, ErrorStat, TopFiveErrorStat, ViolationStat, NormStat, SaturationStat, GradientStat
 
 
 class Monitor:

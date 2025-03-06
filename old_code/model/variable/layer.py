@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 
-from model.variable.variable import Variable
+from old_code.model.variable.variable import Variable
 
 
 

@@ -1,4 +1,4 @@
-from model.minimizer.minimizer import LayerUpdater, Minimizer
+from old_code.model.minimizer.minimizer import LayerUpdater, Minimizer
 
 
 class HopfieldLayerUpdater(LayerUpdater):
@@ -37,7 +37,7 @@ class FixedPointMinimizer(Minimizer):
             num_iterations (int, optional): number of iterations to converge to equilibrium (a minimum of the function). Default: 15
             mode (str, optional): either 'forward', 'backward', 'synchronous' or 'asynchronous'. Default: 'asynchronous'
         """
-
+        print(free_layers)
         updaters = [HopfieldLayerUpdater(layer, fn) for layer in free_layers]
 
         Minimizer.__init__(self, fn, updaters, num_iterations, mode)

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import torch
 
-from model.variable.variable import Variable
+from old_code.model.variable.variable import Variable
 
 
 

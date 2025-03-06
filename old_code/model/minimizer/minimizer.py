@@ -197,6 +197,7 @@ class Minimizer:
         """Runs one step of the equilibration process"""
         
         # for layer_group in self._list_layers:
+        
         pre_activations = [updater.pre_activate() for updater in layer_group]
         for updater, pre_activation in zip(layer_group, pre_activations):
             updater._layer.state = pre_activation  # FIXME

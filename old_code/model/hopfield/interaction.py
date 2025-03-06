@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from model.function.interaction import Function 
+from old_code.model.function.interaction import Function 
 
 
 
@@ -130,6 +130,10 @@ class DenseHopfield(Function):
             self._layer_pre: self._grad_pre,
             self._layer_post: self._grad_post
             }
+        if self._layer_pre == layer:
+            print("layer_pre")
+        if self._layer_post == layer:
+            print("layer_post")
         return dictionary[layer]
 
     def grad_param_fn(self, param):
