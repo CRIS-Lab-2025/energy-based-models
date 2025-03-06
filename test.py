@@ -5,18 +5,24 @@ import torch.nn.functional as F
 import numpy as np
 # Create a toy dataset of 2 interlocking rings in 3D and with 1000 points and labels for each point
 # Create a toy dataset of interlocking rings perpendicular to each other in 3D
-num_points = 500
+num_points = 20
 theta = torch.linspace(0, 2 * torch.pi, num_points)
 
 # First ring in the XY plane, centered at (1, 0, 0)
-x1 = 1 + torch.cos(theta)
-y1 = torch.sin(theta)
+# x1 = 1 + torch.cos(theta)
+# y1 = torch.sin(theta)
+# z1 = torch.zeros(num_points)
+x1 = theta
+y1 = theta + 1
 z1 = torch.zeros(num_points)
 
 # Second ring in the XZ plane, centered at (0, 0, 1)
-x2 = torch.cos(theta)
-y2 = torch.zeros(num_points)
-z2 = 1 + torch.sin(theta)
+# x2 = torch.cos(theta)
+# y2 = torch.zeros(num_points)
+# z2 = 1 + torch.sin(theta)
+x2 = torch.zeros(num_points)
+y2 = theta - 1
+z2 = theta
 
 # Combine the rings
 X1 = torch.stack([x1, y1, z1], dim=1)
@@ -53,7 +59,7 @@ energy_fn = HopfieldEnergy(config)
 cost_fn = SquaredError(config)
 updater = FixedPointUpdater(network, energy_fn, cost_fn, config)
 W, B = network.weights, network.biases
-optimizer = torch.optim.SGD([W, B], lr=0.001)
+optimizer = torch.optim.SGD([W, B], lr=0.001) # NOTE: no momentum or decay
 differentiator = EquilibriumProp(network, energy_fn, cost_fn, updater, config, optimizer)
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.training["batch_size"], shuffle=True, drop_last=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.training["batch_size"], shuffle=True)

@@ -3,7 +3,9 @@ import torch
 from util.config import Config
 
 class Network(ABC):
-    """TODO: Class description"""
+    """
+    Class used to #TODO
+    """
     def __init__(self, config: Config, num_neurons, batch_size):
         self.config = config
         self.num_neurons = num_neurons
@@ -29,7 +31,7 @@ class Network(ABC):
         """Update the network state by setting the input to the values 
         in the given tensor.
         """
-        self.state[:input.shape[0]] = input
+        self.state[:,:input.shape[0]] = input
 
     def _reset_state(self):
         """Reset the network state to all zeros."""

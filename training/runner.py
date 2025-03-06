@@ -99,6 +99,7 @@ class Runner:
             # print(W)
             W.grad, B.grad = weight_grads, bias_grads
             self._optimizer.step()
+            # NOTE: orig repo clamped all parameters (weights & biases) here
             output = S[:,self._network.layers[-1]].clone()
             outputs.append(output)
             targets.append(target)
