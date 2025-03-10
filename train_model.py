@@ -22,9 +22,7 @@ class ExternalWorld:
         self.size_dataset = len(self.x)
 
 
-
-
-def plot_network_structure(net):
+def plot_network_structure(net: Network):
     G = nx.DiGraph()
     layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
@@ -46,7 +44,7 @@ def plot_network_structure(net):
     plt.title("Network Structure")
     plt.show()
 
-def plot_network_weights(net, epoch):
+def plot_network_weights(net: Network, epoch):
     G = nx.DiGraph()
     layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
@@ -81,9 +79,7 @@ def plot_network_weights(net, epoch):
     plt.show()
 
 
-
-
-def train_net(net, plot_graph = False):
+def train_net(net: Network, plot_graph = False):
     history = {"Energy": [], "Cost": [], "Error": []}
     epochs, batch_size = net.hyperparameters["n_epochs"], net.hyperparameters["batch_size"]
     n_batches = net.dataset_size // batch_size
@@ -130,7 +126,7 @@ if __name__ == "__main__":
         "n_it_neg": 1,
         "n_it_pos": 1,
         "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)],
-        "output_size": 10,
+        "output_size": 10
     }))
 
 
