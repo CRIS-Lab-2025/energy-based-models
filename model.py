@@ -144,6 +144,80 @@ class Network:
         biases = [torch.tensor(b, dtype=torch.float32) for b in biases_values]
         weights = [torch.tensor(W, dtype=torch.float32) for W in weights_values]
         return biases, weights, hyper, training_curves
+        
+    def negative_phase_clamp(self, n_iterations, clamped_nodes={}):
+        """Perform the negative phase relaxation while clamping specific nodes (single input mode)."""
+        current_layers = [layer.clone() for layer in self.layers]
+
+        for _ in range(n_iterations):
+            new_layers = [clamped_nodes.get(0, current_layers[0])]  # Ensure input stays fixed
+
+            for k in range(1, len(self.layers) - 1):
+                hidden_input = (
+                    torch.matmul(new_layers[-1], self.weights[k - 1]) +
+                    torch.matmul(current_layers[k + 1], self.weights[k].T) +
+                    self.biases[k]
+                )
+
+                # Enforce clamping directly without unnecessary expansion
+                new_layer = clamped_nodes[k] if k in clamped_nodes else pi(hidden_input)
+                new_layers.append(new_layer)
+
+            # Handle output layer clamping correctly
+            if len(new_layers) in clamped_nodes:
+                new_layers.append(clamped_nodes[len(new_layers)])  # No expansion needed
+            else:
+                output_input = torch.matmul(new_layers[-1], self.weights[-1]) + self.biases[-1]
+                new_layers.append(pi(output_input))
+
+            current_layers = new_layers
+
+        # Update network state
+        self.layers[0] = new_layers[0]
+
+        # Update persistent particles correctly
+        start, end = self.index * self.batch_size, (self.index + 1) * self.batch_size
+        for i in range(len(self.persistent_particles)):
+            self.persistent_particles[i][start:end] = current_layers[i + 1].detach()
+        
+        self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
+
+
+
+
+    def positive_phase_clamp(self, n_iterations, clamped_nodes={}, *alphas):
+        """Perform the positive phase (backprop-like relaxation) while clamping specific nodes."""
+        batch_size = self.x_data.shape[0]
+        initial_layers = self.layers[:-1] + [self.y_data_one_hot]
+        current_layers = [layer.clone() for layer in initial_layers]
+
+        for _ in range(n_iterations):
+            new_layers = [current_layers[-1]]  # Start from the output layer
+
+            for k in range(len(self.layers) - 2, 0, -1):
+                back_input = (
+                    torch.matmul(self.layers[k - 1], self.weights[k - 1]) +
+                    torch.matmul(new_layers[-1], self.weights[k].T) +
+                    self.biases[k]
+                )
+                new_layer = pi(back_input)
+                if k in clamped_nodes:
+                    new_layer = clamped_nodes[k]  # Clamp specific layer
+                new_layers.append(new_layer)
+
+            new_layers.append(self.layers[0])  # Clamp input layer if specified
+            new_layers.reverse()
+            current_layers = new_layers
+
+        Delta_layers = [new - old for new, old in zip(current_layers[1:], self.layers[1:])]
+
+        for i, delta in enumerate(Delta_layers, start=1):
+            self.biases[i] += alphas[i - 1] * delta.mean(dim=0)
+
+        for i, delta in enumerate(Delta_layers):
+            self.weights[i] += alphas[i] * (self.layers[i].T @ delta) / batch_size
+
+
 
 
 
