@@ -8,23 +8,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from model import Network
 import networkx as nx
+from external_world import ExternalWorld, MNISTExternalWorld
 
-
-class ExternalWorld:
-    def __init__(self):
-        path = os.path.join(os.getcwd(), "mnist.pkl.gz")
-        if not os.path.isfile(path):
-            urlretrieve("http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz", path)
-        with gzip.open(path, "rb") as f:
-            train, valid, test = pickle.load(f, encoding="latin1")
-        self.x = torch.tensor(np.vstack((train[0], valid[0], test[0])), dtype=torch.float32)
-        self.y = torch.tensor(np.hstack((train[1], valid[1], test[1])), dtype=torch.int64)
-        self.size_dataset = len(self.x)
-
-
-
-
-def plot_network_structure(net):
+def plot_network_structure(net: Network):
     G = nx.DiGraph()
     layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
@@ -46,7 +32,7 @@ def plot_network_structure(net):
     plt.title("Network Structure")
     plt.show()
 
-def plot_network_weights(net, epoch):
+def plot_network_weights(net: Network, epoch):
     G = nx.DiGraph()
     layer_labels = ['Input'] + [f'Hidden {i+1}' for i in range(len(net.hyperparameters["hidden_sizes"]))] + ['Output']
 
@@ -81,9 +67,7 @@ def plot_network_weights(net, epoch):
     plt.show()
 
 
-
-
-def train_net(net, plot_graph = False):
+def train_net(net: Network, plot_graph = False):
     history = {"Energy": [], "Cost": [], "Error": []}
     epochs, batch_size = net.hyperparameters["n_epochs"], net.hyperparameters["batch_size"]
     n_batches = net.dataset_size // batch_size
@@ -121,17 +105,19 @@ def train_net(net, plot_graph = False):
 
 
 if __name__ == "__main__":
-
-    # Initialize and train
-    train_net(Network("mnist", ExternalWorld(), {
-        "hidden_sizes": [500],
-        "n_epochs": 10,
-        "batch_size": 20,
-        "n_it_neg": 1,
-        "n_it_pos": 1,
-        "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)],
-        "output_size": 10,
-    }))
+    train_net(net=Network(
+        name="mnist", 
+        external_world=MNISTExternalWorld(), 
+        hyperparameters={
+            "hidden_sizes": [500],
+            "n_epochs": 10,
+            "batch_size": 20,
+            "n_it_neg": 1,
+            "n_it_pos": 1,
+            "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)],
+            "output_size": 10
+        }
+    ))
 
 
 

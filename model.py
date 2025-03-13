@@ -5,9 +5,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import networkx as nx
 import pickle
-
-def pi(s):
-    return torch.clamp(s, 0.0, 1.0)
+from util.activation import *
+from util.energy import *
 
 class Network:
     def __init__(self, name, external_world, hyperparameters={}):
@@ -40,21 +39,24 @@ class Network:
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
 
     def energy(self, layers):
-        # Compute the energy function E for the current layers.
-        # squared_norm: for each layer, sum of squares of each row, then sum over layers.
-        squared_norm = sum([(layer * layer).sum(dim=1) for layer in layers]) / 2.0
-        # linear_terms: for each layer, compute dot(layer, bias).
-        linear_terms = -sum([torch.matmul(layer, b) for layer, b in zip(layers, self.biases)])
-        # quadratic_terms: for each adjacent pair of layers.
-        quadratic_terms = -sum([
-            ((torch.matmul(pre, W)) * post).sum(dim=1)
-            for pre, W, post in zip(layers[:-1], self.weights, layers[1:])
-        ])
-        return squared_norm + linear_terms + quadratic_terms
-    
+        """Compute the energy function E for the current layers."""
+        energy_fn = self.hyperparameters["energy_fn"] if "energy_fn" in self.hyperparameters else "hopfield"
+
+        if energy_fn == 'none':
+            pass
+        elif energy_fn == 'hopfield':
+            return hopfield(layers, self.weights, self.biases)
+        else:
+            raise ValueError('Unknown energy function type: {}'.format(energy_fn))
+
     def cost(self, layers):
         # Squared error cost between the last layer and the one-hot labels.
         return ((layers[-1] - self.y_data_one_hot) ** 2).sum(dim=1)
+    
+    def activation(self, neurons):
+        """Compute the activation of the given neurons' values."""
+        activation = self.hyperparameters["activation"] if "activation" in self.hyperparameters else "pi"
+        return get_activation(activation, neurons)
     
     def measure(self):
         """Measure the average energy, cost, and error over the current mini-batch."""
@@ -75,10 +77,10 @@ class Network:
                 hidden_input = (torch.matmul(new_layers[-1], self.weights[k - 1]) +
                                 torch.matmul(current_layers[k + 1], self.weights[k].t()) +
                                 self.biases[k])
-                new_layers.append(pi(hidden_input))
+                new_layers.append(self.activation(hidden_input))
             # Compute output layer.
             output_input = torch.matmul(new_layers[-1], self.weights[-1]) + self.biases[-1]
-            new_layers.append(pi(output_input))
+            new_layers.append(self.activation(output_input))
             current_layers = new_layers
         # Update the persistent particles for the current mini-batch.
         start = self.index * self.batch_size
@@ -101,7 +103,7 @@ class Network:
                 back_input = (torch.matmul(self.layers[k - 1], self.weights[k - 1]) +
                               torch.matmul(new_layers[-1], self.weights[k].t()) +
                               self.biases[k])
-                new_layers.append(pi(back_input))
+                new_layers.append(self.activation(back_input))
             new_layers.append(self.layers[0])
             new_layers.reverse()
             current_layers = new_layers
@@ -113,7 +115,6 @@ class Network:
         # Update weights for each connection.
         for i, delta in enumerate(Delta_layers):
             self.weights[i] = self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size
-
 
     def save_params(self):
         biases_values = [b.detach().numpy() for b in self.biases]
