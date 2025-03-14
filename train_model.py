@@ -105,7 +105,7 @@ def train_net(net: Network, plot_graph = False):
 
 
 if __name__ == "__main__":
-    train_net(net=Network(
+    net =Network(
         name="mnist", 
         external_world=MNISTExternalWorld(), 
         hyperparameters={
@@ -117,7 +117,29 @@ if __name__ == "__main__":
             "alphas": [np.float32(0.4), np.float32(0.1), np.float32(0.008)],
             "output_size": 10
         }
-    ))
+    )
+    train_net(net)
+    target = torch.zeros(20, 10)
+    for i in range(20):
+        class_idx = torch.randint(0, 10, (1,)).item()
+        target[i, class_idx] = torch.rand(1).item() * 0.5 + 0.5  # Assign a high probability to one class
+        remaining_probs = torch.rand(9)
+        remaining_probs /= remaining_probs.sum()  # Normalize to sum to 1
+        remaining_probs *= (1 - target[i, class_idx])  # Scale to the remaining probability
+        idx = 0
+        for j in range(10):
+            if j != class_idx:
+                target[i, j] = remaining_probs[idx]
+                idx += 1
+
+    regen_input = net.reverse_infer(target,10)
+    fig, axes = plt.subplots(4, 5, figsize=(10, 8))
+    for ax, img in zip(axes.flatten(), regen_input):
+        ax.imshow(img.view(28, 28).detach().numpy(), cmap='gray')
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
 
 
 

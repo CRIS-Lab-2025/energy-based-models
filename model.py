@@ -147,6 +147,7 @@ class Network:
         for i in range(len(self.persistent_particles)):
             self.persistent_particles[i][start:end] = current_layers[i + 1].detach()
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
+        return current_layers[0]
 
     def save_params(self):
         biases_values = [b.detach().numpy() for b in self.biases]
