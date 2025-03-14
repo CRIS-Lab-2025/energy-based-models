@@ -17,6 +17,7 @@ class Network:
         input_size = external_world.x.shape[1]
         output_size = hyperparameters.get("output_size", len(torch.unique(external_world.y)))
         layer_sizes = [input_size] + hyperparameters["hidden_sizes"] + [output_size]
+        self.clamped_layers = [0]
 
         self.biases, self.weights, self.training_curves = self._initialize_params(layer_sizes)
         self.batch_size = hyperparameters["batch_size"]
@@ -71,16 +72,19 @@ class Network:
         # Copy the current mini-batch layers to iterate on.
         current_layers = [layer.clone() for layer in self.layers]
         for _ in range(n_iterations):
-            new_layers = [current_layers[0]]  # input layer remains clamped.
+            new_layers = [torch.zeros(i.shape) for i in self.layers]  # input layer remains clamped.
+            new_layers[0] = current_layers[0]
             # For hidden layers (except the final output layer).
-            for k in range(1, len(self.layers) - 1):
-                hidden_input = (torch.matmul(new_layers[-1], self.weights[k - 1]) +
+            # shuffle range(1, len(self.layers) - 1)
+            iter_order = range(1, len(self.layers) - 1)
+            for k in iter_order:
+                hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
                                 torch.matmul(current_layers[k + 1], self.weights[k].t()) +
                                 self.biases[k])
-                new_layers.append(self.activation(hidden_input))
+                new_layers[k]=(self.activation(hidden_input))
             # Compute output layer.
-            output_input = torch.matmul(new_layers[-1], self.weights[-1]) + self.biases[-1]
-            new_layers.append(self.activation(output_input))
+            output_input = torch.matmul(new_layers[-2], self.weights[-1]) + self.biases[-1]
+            new_layers[-1] = self.activation(output_input)
             current_layers = new_layers
         # Update the persistent particles for the current mini-batch.
         start = self.index * self.batch_size
@@ -112,9 +116,37 @@ class Network:
         # Update biases for layers 1 to end.
         for i, delta in enumerate(Delta_layers, start=1):
             self.biases[i] = self.biases[i] + alphas[i - 1] * delta.mean(dim=0)
+        #
         # Update weights for each connection.
         for i, delta in enumerate(Delta_layers):
-            self.weights[i] = self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size
+            self.weights[i] = (self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size )
+        
+    def reverse_infer(self,output, n_iterations=10,clamped_layers=[-1]):
+        """Perform the negative phase relaxation (forward pass)."""
+        # Copy the current mini-batch layers to iterate on.
+        current_layers = [layer.clone() for layer in self.layers]
+        current_layers[-1] = output
+        for _ in range(n_iterations):
+            new_layers = [torch.zeros(i.shape) for i in self.layers]  # input layer remains clamped.
+            for i in clamped_layers: new_layers[i] = current_layers[i]
+            # For hidden layers (except the final output layer).
+            # shuffle range(1, len(self.layers) - 1)
+            iter_order = np.random.permutation(range(1, len(self.layers) - 1))
+            for k in iter_order:
+                hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
+                                torch.matmul(current_layers[k + 1], self.weights[k].t()) +
+                                self.biases[k])
+                new_layers[k]=(self.activation(hidden_input))
+            # Compute output layer.
+            output_input = torch.matmul(new_layers[1], self.weights[0].T) + self.biases[0]
+            new_layers[0] = self.activation(output_input)
+            current_layers = new_layers
+        # Update the persistent particles for the current mini-batch.
+        start = self.index * self.batch_size
+        end = (self.index + 1) * self.batch_size
+        for i in range(len(self.persistent_particles)):
+            self.persistent_particles[i][start:end] = current_layers[i + 1].detach()
+        self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
 
     def save_params(self):
         biases_values = [b.detach().numpy() for b in self.biases]
