@@ -18,7 +18,7 @@ class Network:
         input_size = external_world.x.shape[1]
         output_size = hyperparameters.get("output_size", len(torch.unique(external_world.y)))
         layer_sizes = [input_size] + hyperparameters["hidden_sizes"] + [output_size]
-
+        self.layer_sizes = layer_sizes
         self.biases, self.weights, self.training_curves = self._initialize_params(layer_sizes)
         self.batch_size = hyperparameters["batch_size"]
         self.dataset_size = external_world.size_dataset
