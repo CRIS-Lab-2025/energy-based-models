@@ -19,6 +19,10 @@ class Network:
         output_size = hyperparameters.get("output_size", len(torch.unique(external_world.y)))
         layer_sizes = [input_size] + hyperparameters["hidden_sizes"] + [output_size]
         self.clamped_layers = [0]
+<<<<<<< HEAD
+=======
+        self.layer_sizes = layer_sizes
+>>>>>>> 586f92d (Testing MCMC)
 
         self.biases, self.weights, self.training_curves = self._initialize_params(layer_sizes)
         self.batch_size = hyperparameters["batch_size"]
