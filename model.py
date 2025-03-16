@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import networkx as nx
 import pickle
-
-def pi(s):
-    return torch.clamp(s, 0.0, 1.0)
+from util.activation import *
+from util.energy import *
+import os
 
 class Network:
     def __init__(self, name, external_world, hyperparameters={}):
@@ -18,7 +18,8 @@ class Network:
         input_size = external_world.x.shape[1]
         output_size = hyperparameters.get("output_size", len(torch.unique(external_world.y)))
         layer_sizes = [input_size] + hyperparameters["hidden_sizes"] + [output_size]
-        self.layer_sizes = layer_sizes
+        self.clamped_layers = [0]
+
         self.biases, self.weights, self.training_curves = self._initialize_params(layer_sizes)
         self.batch_size = hyperparameters["batch_size"]
         self.dataset_size = external_world.size_dataset
@@ -40,21 +41,24 @@ class Network:
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
 
     def energy(self, layers):
-        # Compute the energy function E for the current layers.
-        # squared_norm: for each layer, sum of squares of each row, then sum over layers.
-        squared_norm = sum([(layer * layer).sum(dim=1) for layer in layers]) / 2.0
-        # linear_terms: for each layer, compute dot(layer, bias).
-        linear_terms = -sum([torch.matmul(layer, b) for layer, b in zip(layers, self.biases)])
-        # quadratic_terms: for each adjacent pair of layers.
-        quadratic_terms = -sum([
-            ((torch.matmul(pre, W)) * post).sum(dim=1)
-            for pre, W, post in zip(layers[:-1], self.weights, layers[1:])
-        ])
-        return squared_norm + linear_terms + quadratic_terms
-    
+        """Compute the energy function E for the current layers."""
+        energy_fn = self.hyperparameters["energy_fn"] if "energy_fn" in self.hyperparameters else "hopfield"
+
+        if energy_fn == 'none':
+            pass
+        elif energy_fn == 'hopfield':
+            return hopfield(layers, self.weights, self.biases)
+        else:
+            raise ValueError('Unknown energy function type: {}'.format(energy_fn))
+
     def cost(self, layers):
         # Squared error cost between the last layer and the one-hot labels.
         return ((layers[-1] - self.y_data_one_hot) ** 2).sum(dim=1)
+    
+    def activation(self, neurons):
+        """Compute the activation of the given neurons' values."""
+        activation = self.hyperparameters["activation"] if "activation" in self.hyperparameters else "pi"
+        return get_activation(activation, neurons)
     
     def measure(self):
         """Measure the average energy, cost, and error over the current mini-batch."""
@@ -69,16 +73,19 @@ class Network:
         # Copy the current mini-batch layers to iterate on.
         current_layers = [layer.clone() for layer in self.layers]
         for _ in range(n_iterations):
-            new_layers = [current_layers[0]]  # input layer remains clamped.
+            new_layers = [torch.zeros(i.shape) for i in self.layers]  # input layer remains clamped.
+            new_layers[0] = current_layers[0]
             # For hidden layers (except the final output layer).
-            for k in range(1, len(self.layers) - 1):
-                hidden_input = (torch.matmul(new_layers[-1], self.weights[k - 1]) +
+            # shuffle range(1, len(self.layers) - 1)
+            iter_order = range(1, len(self.layers) - 1)
+            for k in iter_order:
+                hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
                                 torch.matmul(current_layers[k + 1], self.weights[k].t()) +
                                 self.biases[k])
-                new_layers.append(pi(hidden_input))
+                new_layers[k]=(self.activation(hidden_input))
             # Compute output layer.
-            output_input = torch.matmul(new_layers[-1], self.weights[-1]) + self.biases[-1]
-            new_layers.append(pi(output_input))
+            output_input = torch.matmul(new_layers[-2], self.weights[-1]) + self.biases[-1]
+            new_layers[-1] = self.activation(output_input)
             current_layers = new_layers
         # Update the persistent particles for the current mini-batch.
         start = self.index * self.batch_size
@@ -101,7 +108,7 @@ class Network:
                 back_input = (torch.matmul(self.layers[k - 1], self.weights[k - 1]) +
                               torch.matmul(new_layers[-1], self.weights[k].t()) +
                               self.biases[k])
-                new_layers.append(pi(back_input))
+                new_layers.append(self.activation(back_input))
             new_layers.append(self.layers[0])
             new_layers.reverse()
             current_layers = new_layers
@@ -110,10 +117,38 @@ class Network:
         # Update biases for layers 1 to end.
         for i, delta in enumerate(Delta_layers, start=1):
             self.biases[i] = self.biases[i] + alphas[i - 1] * delta.mean(dim=0)
+        #
         # Update weights for each connection.
         for i, delta in enumerate(Delta_layers):
-            self.weights[i] = self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size
-
+            self.weights[i] = (self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size )
+        
+    def reverse_infer(self,output, n_iterations=10,clamped_layers=[-1]):
+        """Perform the negative phase relaxation (forward pass)."""
+        # Copy the current mini-batch layers to iterate on.
+        current_layers = [layer.clone() for layer in self.layers]
+        current_layers[-1] = output
+        for _ in range(n_iterations):
+            new_layers = [torch.zeros(i.shape) for i in self.layers]  # input layer remains clamped.
+            for i in clamped_layers: new_layers[i] = current_layers[i]
+            # For hidden layers (except the final output layer).
+            # shuffle range(1, len(self.layers) - 1)
+            iter_order = np.random.permutation(range(1, len(self.layers) - 1))
+            for k in iter_order:
+                hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
+                                torch.matmul(current_layers[k + 1], self.weights[k].t()) +
+                                self.biases[k])
+                new_layers[k]=(self.activation(hidden_input))
+            # Compute output layer.
+            output_input = torch.matmul(new_layers[1], self.weights[0].T) + self.biases[0]
+            new_layers[0] = self.activation(output_input)
+            current_layers = new_layers
+        # Update the persistent particles for the current mini-batch.
+        start = self.index * self.batch_size
+        end = (self.index + 1) * self.batch_size
+        for i in range(len(self.persistent_particles)):
+            self.persistent_particles[i][start:end] = current_layers[i + 1].detach()
+        self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
+        return current_layers[0]
 
     def save_params(self):
         biases_values = [b.detach().numpy() for b in self.biases]
@@ -144,7 +179,3 @@ class Network:
         biases = [torch.tensor(b, dtype=torch.float32) for b in biases_values]
         weights = [torch.tensor(W, dtype=torch.float32) for W in weights_values]
         return biases, weights, hyper, training_curves
-
-
-
-
