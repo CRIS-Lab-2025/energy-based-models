@@ -11,6 +11,8 @@ def get_activation(activation, neurons: torch.Tensor):
         pass
     elif activation == "pi":
         return pi(neurons)
+    elif activation == 'relu':
+        return relu(neurons)
     elif activation == 'linear':
         return linear(neurons)
     elif activation == 'sigmoid':
@@ -28,6 +30,10 @@ def get_activation(activation, neurons: torch.Tensor):
 def pi(s):
     """Hard sigmoid but as they've defined it"""
     return torch.clamp(s, 0.0, 1.0)
+
+def relu(neurons: torch.Tensor):
+    """Returns the value of the layer's state"""
+    return torch.relu(neurons)
 
 def linear(neurons: torch.Tensor):
     """Returns the value of the layer's state"""

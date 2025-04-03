@@ -6,9 +6,9 @@ import torch
 from urllib.request import urlretrieve
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from model import Network
+from ebm.model import Network
 import networkx as nx
-from external_world import ExternalWorld, MNISTExternalWorld
+from ebm.external_world import ExternalWorld, MNISTExternalWorld
 
 def plot_network_structure(net: Network):
     G = nx.DiGraph()

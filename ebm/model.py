@@ -24,6 +24,7 @@ class Network:
         self.dataset_size = external_world.size_dataset
         self.persistent_particles = [torch.zeros((self.dataset_size, size)) for size in layer_sizes[1:]]
         self.index = 0
+        self.grads = []
 
     def _initialize_params(self, layer_sizes):
         biases = [torch.zeros(size) for size in layer_sizes]
@@ -35,6 +36,7 @@ class Network:
     def update_mini_batch_index(self, index):
         start, end = index * self.batch_size, (index + 1) * self.batch_size
         self.x_data, self.y_data = self.external_world.x[start:end], self.external_world.y[start:end]
+        #print(self.x_data.shape)
         output_size = self.hyperparameters["output_size"]
         self.y_data_one_hot = F.one_hot(self.y_data, num_classes=output_size).float()
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
@@ -67,6 +69,45 @@ class Network:
         error = (y_prediction != self.y_data).float().mean().item()
         return E, C, error
     
+    def forward(self, dataloader, n_iterations):
+        """Perform forward pass with negative phase relaxation on a given dataloader."""
+        total_energy = 0
+        total_cost = 0
+        total_error = 0
+        n_batches = 0
+        
+        # Store original persistent particles
+        original_particles = [p.clone() for p in self.persistent_particles]
+        
+        x,y = dataloader
+        n_batches = x.shape[0]
+        # Move data to device and prepare one-hot labels
+        self.x_data = x
+        self.y_data = y
+        self.y_data_one_hot = F.one_hot(self.y_data, num_classes=self.weights[-1].shape[1]).float()
+        
+        # Initialize layers for this batch
+        print(self.x_data.shape)
+        self.layers = [self.x_data] + [p[:x.size(0)] for p in self.persistent_particles]
+        
+        # Perform negative phase
+        self.negative_phase(n_iterations)
+        
+        # Measure metrics
+        E, C, error = self.measure()
+        total_energy += E
+        total_cost += C
+        total_error += error
+
+        
+        # Restore original persistent particles
+        self.persistent_particles = original_particles
+        
+        # Return average metrics
+        return (total_energy / n_batches, 
+                total_cost / n_batches, 
+                total_error / n_batches)
+
     def negative_phase(self, n_iterations):
         """Perform the negative phase relaxation (forward pass)."""
         # Copy the current mini-batch layers to iterate on.
@@ -81,8 +122,21 @@ class Network:
                 hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
                                 torch.matmul(current_layers[k + 1], self.weights[k].t()) +
                                 self.biases[k])
-                new_layers[k]=(self.activation(hidden_input))
-            # Compute output layer.
+                # Batch normalization
+                hidden_input = self.activation(hidden_input)
+                # Min-max normalization to [0,1] range
+                min_val = hidden_input.min(dim=0)[0]
+                max_val = hidden_input.max(dim=0)[0]
+                hidden_input = (hidden_input - min_val) / (max_val - min_val + 1e-5)  # Add epsilon to avoid division by zero
+                #print(f"hidden_input mean: {hidden_input.mean():.4f}, std: {hidden_input.std():.4f}, max: {hidden_input.max():.4f}, min: {hidden_input.min():.4f}")
+                # Batch normalization using mean and std
+                # mean = hidden_input.mean(dim=0)
+                # std = hidden_input.std(dim=0) + 1e-5
+                # hidden_input = (hidden_input - mean) / std
+                hidden_input = hidden_input - hidden_input.mean(dim=0)
+                #print(f"hidden_input mean: {hidden_input.mean():.4f}, std: {hidden_input.std():.4f}, max: {hidden_input.max():.4f}, min: {hidden_input.min():.4f}")
+                new_layers[k]=(hidden_input)
+            # Compute output layer.3:45pm
             output_input = torch.matmul(new_layers[-2], self.weights[-1]) + self.biases[-1]
             new_layers[-1] = self.activation(output_input)
             current_layers = new_layers
@@ -107,21 +161,37 @@ class Network:
                 back_input = (torch.matmul(self.layers[k - 1], self.weights[k - 1]) +
                               torch.matmul(new_layers[-1], self.weights[k].t()) +
                               self.biases[k])
-                new_layers.append(self.activation(back_input))
+                back_input = self.activation(back_input)
+                # Min-max normalization to [0,1] range
+                min_val = back_input.min(dim=0)[0]
+                max_val = back_input.max(dim=0)[0]
+                back_input = (back_input - min_val) / (max_val - min_val + 1e-5)  # Add epsilon to avoid division by zero
+                # back_input = back_input - 0.5 / 0.5
+                back_input = back_input - back_input.mean(dim=0)
+                # Batch normalization using mean and std
+                # mean = back_input.mean(dim=0)
+                # std = back_input.std(dim=0) + 1e-5
+                # back_input = (back_input - mean) / std
+                #print(f"back_input mean: {back_input.mean():.4f}, std: {back_input.std():.4f}, max: {back_input.max():.4f}, min: {back_input.min():.4f}")
+                new_layers.append(back_input)
             new_layers.append(self.layers[0])
             new_layers.reverse()
             current_layers = new_layers
         # Compute the difference (Delta) between the new layers and the persistent ones (skipping the input).
         Delta_layers = [new - old for new, old in zip(current_layers[1:], self.layers[1:])]
+        #print(f"Delta_layers mean: {Delta_layers[0].mean():.4f}, std: {Delta_layers[0].std():.4f}, max: {Delta_layers[0].max():.4f}, min: {Delta_layers[0].min():.4f}")
         # Update biases for layers 1 to end.
         for i, delta in enumerate(Delta_layers, start=1):
             self.biases[i] = self.biases[i] + alphas[i - 1] * delta.mean(dim=0)
         #
         # Update weights for each connection.
+        
         for i, delta in enumerate(Delta_layers):
             self.weights[i] = (self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size )
+            grads = self.layers[i].t()@delta
+            #print(f"grads mean: {grads.mean():.4f}, std: {grads.std():.4f}, max: {grads.max():.4f}, min: {grads.min():.4f}")
         
-    def reverse_infer(self,output, n_iterations=10,clamped_layers=[-1]):
+    def backward(self,output, n_iterations=10,clamped_layers=[-1]):
         """Perform the negative phase relaxation (forward pass)."""
         # Copy the current mini-batch layers to iterate on.
         current_layers = [layer.clone() for layer in self.layers]
@@ -137,6 +207,15 @@ class Network:
                                 torch.matmul(current_layers[k + 1], self.weights[k].t()) +
                                 self.biases[k])
                 new_layers[k]=(self.activation(hidden_input))
+                # Batch normalization using mean and std
+                # mean = new_layers[k].mean(dim=0)
+                # std = new_layers[k].std(dim=0) + 1e-5
+                # new_layers[k] = (new_layers[k] - mean) / std
+                # Min-max normalization to [0,1] range
+                min_val = new_layers[k].min(dim=0)[0]
+                max_val = new_layers[k].max(dim=0)[0]
+                new_layers[k] = (new_layers[k] - min_val) / (max_val - min_val + 1e-5)  # Add epsilon to avoid division by zero
+                # new_layers[k] = new_layers[k] - new_layers[k].mean(dim=0)
             # Compute output layer.
             output_input = torch.matmul(new_layers[1], self.weights[0].T) + self.biases[0]
             new_layers[0] = self.activation(output_input)
