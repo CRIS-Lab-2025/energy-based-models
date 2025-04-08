@@ -24,10 +24,21 @@ def get_activation(activation, neurons: torch.Tensor):
     else: 
         raise ValueError('Unknown activation type: {}'.format(activation))
 
+def get_activation_deriv(activation, neurons: torch.Tensor):
+
+    if activation == 'pi':
+        return pi_prime(neurons)
+    else: 
+        raise ValueError('Unknown activation type: {}'.format(activation))
+
 
 def pi(s):
     """Hard sigmoid but as they've defined it"""
     return torch.clamp(s, 0.0, 1.0)
+
+def pi_prime(s):
+    # Evaluate the derivative of pi for each element in s
+    return torch.logical_and(s > 0.0, s < 1.0).float()
 
 def linear(neurons: torch.Tensor):
     """Returns the value of the layer's state"""
@@ -65,3 +76,4 @@ def auxiliary(neurons):
 def dSiLU(neurons: torch.Tensor):
     """Returns the sigmoid-weighted linear function applied to the layer's state"""
     return auxiliary(neurons) - auxiliary(neurons - 1.)
+

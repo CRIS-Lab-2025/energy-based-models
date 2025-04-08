@@ -44,6 +44,33 @@ class Network:
         self.y_data_one_hot = F.one_hot(self.y_data, num_classes=output_size).float()
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
 
+    def load_x(self, input_data):
+        """Supply and load a batch of inputs into the model, regardless of mini-batch indices"""
+        batch_size, _ = input_data.shape[0], input_data.shape[1]
+        self.layers = [input_data]+[torch.zeros((batch_size, size)) for size in self.layer_sizes[1:]]
+        
+    def inference(self, n_iterations, std):
+        """Perform the negative phase relaxation (forward pass)."""
+        current_layers = [layer.clone() for layer in self.layers]
+        traj = [current_layers]
+        for _ in range(n_iterations):
+            new_layers = [torch.zeros(i.shape) for i in self.layers] 
+            new_layers[0] = current_layers[0]
+            iter_order = range(1, len(self.layers) - 1)
+            for k in iter_order:
+                hidden_input = (torch.matmul(new_layers[k-1], self.weights[k - 1]) +
+                                torch.matmul(current_layers[k + 1], self.weights[k].t()) +
+                                self.biases[k]) + std * torch.randn_like(current_layers[k])
+                new_layers[k]=(self.activation(hidden_input))
+            # Compute output layer.
+            output_input = torch.matmul(new_layers[-2], self.weights[-1]) + self.biases[-1]
+            new_layers[-1] = self.activation(output_input)
+            current_layers = new_layers
+            traj.append(current_layers)
+
+        return traj
+
+
     def energy(self, layers):
         """Compute the energy function E for the current layers."""
         energy_fn = self.hyperparameters["energy_fn"] if "energy_fn" in self.hyperparameters else "hopfield"
@@ -63,6 +90,8 @@ class Network:
         """Compute the activation of the given neurons' values."""
         activation = self.hyperparameters["activation"] if "activation" in self.hyperparameters else "pi"
         return get_activation(activation, neurons)
+    
+
     
     def measure(self):
         """Measure the average energy, cost, and error over the current mini-batch."""
