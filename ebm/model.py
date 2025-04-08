@@ -9,6 +9,24 @@ from util.activation import *
 from util.energy import *
 
 class Network:
+    """
+    Implements a multi-layer neural network trained using the Equilibrium Propagation (EP)
+    learning algorithm, based on Scellier et al. (2017) "Equilibrium Propagation: Bridging
+    the Gap Between Energy-Based Models and Backpropagation".
+
+    The network dynamics relax towards minimizing an energy function (e.g., Hopfield energy).
+    Learning involves two phases:
+    1. Negative Phase: The network settles to a free fixed point (s^0) given an input.
+    2. Positive Phase: The output layer is nudged towards a target, and the network
+       settles to a weakly-clamped fixed point (s^beta).
+    The parameter updates approximate gradient descent on a cost function using the
+    difference between these two phases.
+
+    This process can also be viewed through the lens of variational EM (Bengio et al., 2015,
+    "Towards Biologically Plausible Deep Learning"), where the negative phase performs
+    approximate inference (E-step) and the positive phase + update performs the parameter
+    update (M-step).
+    """
     def __init__(self, name, external_world, hyperparameters={}):
         self.path = name + ".save"
         self.external_world = external_world
@@ -42,7 +60,11 @@ class Network:
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
 
     def energy(self, layers):
-        """Compute the energy function E for the current layers."""
+        """
+        Compute the energy function E for the current layers.
+        Refers to Eq. 1 in the EP paper (Scellier et al., 2017) for the Hopfield energy.
+        E(u) = (1/2) * sum(u_i^2) - (1/2) * sum(W_ij * rho(u_i) * rho(u_j)) - sum(b_i * rho(u_i))
+        """
         energy_fn = self.hyperparameters["energy_fn"] if "energy_fn" in self.hyperparameters else "hopfield"
 
         if energy_fn == 'none':
@@ -53,6 +75,13 @@ class Network:
             raise ValueError('Unknown energy function type: {}'.format(energy_fn))
 
     def cost(self, layers):
+        """
+        Compute the cost function C, measuring the discrepancy between the network's
+        output layer and the target labels.
+        Refers to Eq. 2 in the EP paper (Scellier et al., 2017).
+        C = (1/2) * ||y - target||^2
+        where y is the state of the output layer.
+        """
         # Squared error cost between the last layer and the one-hot labels.
         return ((layers[-1] - self.y_data_one_hot) ** 2).sum(dim=1)
     
@@ -70,7 +99,11 @@ class Network:
         return E, C, error
     
     def forward(self, dataloader, n_iterations):
-        """Perform forward pass with negative phase relaxation on a given dataloader."""
+        """
+        Perform forward pass with negative phase relaxation on a given dataloader.
+        This primarily runs the negative phase to evaluate the model's predictions
+        and associated energy/cost/error without performing parameter updates.
+        """
         total_energy = 0
         total_cost = 0
         total_error = 0
@@ -109,7 +142,16 @@ class Network:
                 total_error / n_batches)
 
     def negative_phase(self, n_iterations):
-        """Perform the negative phase relaxation (forward pass)."""
+        """
+        Perform the negative phase relaxation (free phase).
+
+        The network state evolves according to gradient dynamics on the energy E
+        (equivalent to dynamics on F = E + beta*C with beta=0).
+        Refers to Eq. 4/7 in the EP paper (Scellier et al., 2017): ds/dt = -dF/ds
+        This discrete-time implementation iteratively updates layer states to reach
+        a fixed point s^0 where dF/ds = 0.
+        The input layer (layers[0]) is clamped.
+        """
         # Copy the current mini-batch layers to iterate on.
         current_layers = [layer.clone() for layer in self.layers]
         for _ in range(n_iterations):
@@ -148,10 +190,27 @@ class Network:
         self.layers = [self.x_data] + [p[start:end] for p in self.persistent_particles]
     
     def positive_phase(self, n_iterations, *alphas):
-        """Perform the positive phase (backprop-like relaxation and parameter update)."""
+        """
+        Perform the positive phase (nudged phase) and update parameters.
+
+        1. Nudged Relaxation: The output layer is weakly clamped towards the target
+           (self.y_data_one_hot replaces layers[-1]). The network state then evolves
+           according to dynamics on the total energy F = E + beta*C (with beta > 0 implicitly).
+           The system settles to a new fixed point s^beta near s^0.
+           Refers to Sec 3.2, 3.3 in the EP paper (Scellier et al., 2017).
+
+        2. Parameter Update: Weights (W) and biases (b) are updated based on the
+           difference between the state derivatives in the positive (beta > 0) and
+           negative (beta = 0) phases.
+           Refers to Eq. 24 in the EP paper (Scellier et al., 2017):
+           Delta theta proportional to -(1/beta) * (dF/dtheta(s^beta) - dF/dtheta(s^0))
+           Here, the update is approximated using the difference in layer activations
+           (Delta_layers) between the s^beta and s^0 states.
+           The update rule resembles contrastive Hebbian learning.
+        """
         batch_size = self.x_data.shape[0]
         # Initialize the backprop scan: all layers except last remain unchanged,
-        # and the final layer is replaced by the clamped one-hot label.
+        # and the final layer is replaced by the clamped one-hot label (nudging).
         initial_layers = self.layers[:-1] + [self.y_data_one_hot]
         current_layers = [layer.clone() for layer in initial_layers]
         for _ in range(n_iterations):
@@ -177,22 +236,30 @@ class Network:
             new_layers.append(self.layers[0])
             new_layers.reverse()
             current_layers = new_layers
-        # Compute the difference (Delta) between the new layers and the persistent ones (skipping the input).
+        # Compute the difference (Delta) between the new layers (s^beta state) and the persistent ones (s^0 state).
         Delta_layers = [new - old for new, old in zip(current_layers[1:], self.layers[1:])]
         #print(f"Delta_layers mean: {Delta_layers[0].mean():.4f}, std: {Delta_layers[0].std():.4f}, max: {Delta_layers[0].max():.4f}, min: {Delta_layers[0].min():.4f}")
-        # Update biases for layers 1 to end.
+        # Update biases using the difference (approximating EP gradient Eq. 24 for biases).
         for i, delta in enumerate(Delta_layers, start=1):
             self.biases[i] = self.biases[i] + alphas[i - 1] * delta.mean(dim=0)
         #
-        # Update weights for each connection.
-        
+        # Update weights using the difference (approximating EP gradient Eq. 24 for weights).
+        # This uses a Hebbian-like update: outer product of pre-synaptic state (self.layers[i])
+        # and the change in post-synaptic state (delta).
         for i, delta in enumerate(Delta_layers):
             self.weights[i] = (self.weights[i] + alphas[i] * (self.layers[i].t() @ delta) / batch_size )
             grads = self.layers[i].t()@delta
             #print(f"grads mean: {grads.mean():.4f}, std: {grads.std():.4f}, max: {grads.max():.4f}, min: {grads.min():.4f}")
         
     def backward(self,output, n_iterations=10,clamped_layers=[-1]):
-        """Perform the negative phase relaxation (forward pass)."""
+        """
+        Perform backward relaxation dynamics, primarily used for generative tasks
+        (e.g., reconstructing input from a given output).
+        Clamps specified layers (defaulting to the output layer) and lets the
+        network settle to infer the state of other layers (e.g., the input layer).
+        Similar relaxation dynamics as negative_phase but potentially clamping
+        different layers and propagating influence 'backward'.
+        """
         # Copy the current mini-batch layers to iterate on.
         current_layers = [layer.clone() for layer in self.layers]
         current_layers[-1] = output
