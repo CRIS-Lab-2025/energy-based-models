@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
+from torchvision import datasets, transforms
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 import time
 import json
 import os
+import h5py
 from pathlib import Path
 from model import EnergyBasedModel
 
@@ -314,7 +316,7 @@ def train_ebm(model, train_loader, val_loader, test_loader=None, epochs=50,
             predictions = torch.argmax(output, dim=1).detach().cpu().numpy()
             train_preds.extend(predictions)
             train_targets.extend(target_idx.numpy())
-        
+            
         train_loss /= len(train_loader)
         train_acc = accuracy_score(train_targets, train_preds)
         history['train_loss'].append(train_loss)
@@ -696,13 +698,185 @@ def run_training_experiment(device='cuda' if torch.cuda.is_available() else 'cpu
     
     return trained_model, history
 
+def extract_hidden_representations(model, data_loader, device):
+    """
+    Extract hidden layer representations from the model for all samples in the data loader.
+    
+    Args:
+        model (EnergyBasedModel): Trained model
+        data_loader (DataLoader): DataLoader containing the dataset
+        device (torch.device): Device to run on
+        
+    Returns:
+        dict: Dictionary containing images, labels, and hidden representations
+    """
+    model.eval()
+    hidden_reps = {f'layer_{i}': [] for i in range(len(model.layer_sizes))}
+    images = []
+    labels = []
+    
+    with torch.no_grad():
+        for data, target in tqdm(data_loader, desc='Extracting representations'):
+            data, target = data.to(device), target.to(device)
+            
+            # Get hidden representations
+            states = model.negative(data)
+            
+            # Store representations
+            for i, state in enumerate(states):
+                hidden_reps[f'layer_{i}'].append(state.cpu().numpy())
+            
+            # Store images and labels
+            images.append(data.cpu().numpy())
+            labels.append(target.cpu().numpy())
+    
+    # Concatenate all batches
+    for layer in hidden_reps:
+        hidden_reps[layer] = np.concatenate(hidden_reps[layer], axis=0)
+    images = np.concatenate(images, axis=0)
+    labels = np.concatenate(labels, axis=0)
+    
+    return {
+        'images': images,
+        'labels': labels,
+        'hidden_representations': hidden_reps
+    }
+
+def save_to_hdf5(data_dict, filename):
+    """
+    Save the extracted representations to an HDF5 file.
+    
+    Args:
+        data_dict (dict): Dictionary containing the data to save
+        filename (str): Path to save the HDF5 file
+    """
+    with h5py.File(filename, 'w') as f:
+        # Save images
+        f.create_dataset('images', data=data_dict['images'])
+        
+        # Save labels
+        f.create_dataset('labels', data=data_dict['labels'])
+        
+        # Save hidden representations
+        hidden_group = f.create_group('hidden_representations')
+        for layer_name, data in data_dict['hidden_representations'].items():
+            hidden_group.create_dataset(layer_name, data=data)
+
+def run_mnist_experiment(device='cuda' if torch.cuda.is_available() else 'cpu', debug=False):
+    """
+    Run a complete training experiment with MNIST dataset.
+    
+    Args:
+        device (str): Device to run on ('cuda' or 'cpu')
+        debug (bool): Whether to enable debug mode
+    
+    Returns:
+        tuple: (trained_model, history)
+    """
+    if debug:
+        print("\n========== Starting MNIST Experiment ==========")
+        print(f"Running on device: {device}")
+    
+    # Set up data transformations
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    
+    # Load MNIST dataset
+    train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
+    test_dataset = datasets.MNIST('./data', train=False, transform=transform)
+    
+    # Create data loaders
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    
+    if debug:
+        print(f"\nDataset loaded:")
+        print(f"Training samples: {len(train_dataset)}")
+        print(f"Test samples: {len(test_dataset)}")
+    
+    # Initialize model and optimizer
+    model_config = {
+        'input_size': 784,  # 28x28 MNIST images
+        'hidden_sizes': [512, 256, 128, 10],  # Output size 10 for 10 digits
+        'beta': 0.1,
+        'dt': 0.1,
+        'n_steps': 20,
+        'debug': debug
+    }
+    
+    learning_rate = 0.001
+    
+    if debug:
+        print(f"\nCreating model with config: {model_config}")
+        print(f"Using learning rate: {learning_rate}")
+    
+    # Create model
+    model = EnergyBasedModel(
+        input_size=model_config['input_size'],
+        hidden_sizes=model_config['hidden_sizes'],
+        optimizer=None,  # Will set it below
+        beta=model_config['beta'],
+        dt=model_config['dt'],
+        n_steps=model_config['n_steps'],
+        debug=model_config['debug']
+    )
+    
+    # Move model to device
+    model = model.to(device)
+    
+    # Create optimizer and assign to model
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
+    model.optimizer = optimizer
+    
+    if debug:
+        print("\nModel created and moved to device")
+        print(f"Optimizer: {type(optimizer).__name__}")
+        print("\nStarting training...")
+    
+    # Train model
+    history, trained_model = train_ebm(
+        model=model,
+        train_loader=train_loader,
+        val_loader=test_loader,  # Using test set as validation for simplicity
+        test_loader=None,
+        epochs=10,
+        scheduler_type='cosine',
+        patience=5,
+        early_stopping=True,
+        debug=debug
+    )
+    
+    # Extract and save hidden representations
+    if debug:
+        print("\nExtracting hidden representations...")
+    
+    # Create a new data loader for the entire dataset
+    full_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
+    full_loader = DataLoader(full_dataset, batch_size=32, shuffle=False)
+    
+    # Extract representations
+    representations = extract_hidden_representations(trained_model, full_loader, device)
+    
+    # Save to HDF5
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    hdf5_path = f'mnist_representations_{timestamp}.h5'
+    save_to_hdf5(representations, hdf5_path)
+    
+    if debug:
+        print(f"\nHidden representations saved to {hdf5_path}")
+        print("\n========== Experiment Complete ==========")
+    
+    return trained_model, history
+
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='Run EBM training experiment')
+    parser = argparse.ArgumentParser(description='Run EBM training experiment on MNIST')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--cpu', action='store_true', help='Force CPU usage')
     args = parser.parse_args()
     
     device = 'cpu' if args.cpu else ('cuda' if torch.cuda.is_available() else 'cpu')
-    model, history = run_training_experiment(device=device, debug=args.debug)
+    model, history = run_mnist_experiment(device=device, debug=args.debug)
