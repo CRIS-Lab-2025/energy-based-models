@@ -13,4 +13,12 @@ __pycache__/
 .vscode/
 
 # Jupyter Notebook Checkpoints
-.ipynb_checkpoints/ 
+.ipynb_checkpoints/
+
+# Generated data and plots
+*.h5
+*.png
+*.html
+
+# Specific cache (though covered by __pycache__ generally)
+*.pyc 
