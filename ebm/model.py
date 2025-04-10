@@ -65,8 +65,18 @@ class Network:
         """Measure the average energy, cost, and error over the current mini-batch."""
         E = self.energy(self.layers).mean().item()
         C = self.cost(self.layers).mean().item()
-        y_prediction = self.layers[-1].argmax(dim=1)
-        error = (y_prediction != self.y_data).float().mean().item()
+        # y_prediction = self.layers[-1].argmax(dim=1)
+        # error = (y_prediction != self.y_data).float().mean().item()
+
+        y_pred = self.layers[-1]
+        top_vals, top_idxs = y_pred.topk(2, dim=1)
+
+        # Check if the top prediction is ahead of the second by at least 1e-8
+        confident = (top_vals[:, 0] - top_vals[:, 1]) > 1e-3
+        correct = (top_idxs[:, 0] == self.y_data) & confident
+
+        error = (~correct).float().mean().item()
+
         return E, C, error
     
     def forward(self, dataloader, n_iterations):
