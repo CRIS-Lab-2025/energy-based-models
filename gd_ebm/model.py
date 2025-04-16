@@ -29,8 +29,8 @@ class EnergyBasedModel(nn.Module):
         # We use separate weights for forward and backward to maintain symmetry explicitly
         self.weights = nn.ParameterList([
             nn.Parameter(
-                torch.ones(self.layer_sizes[i], self.layer_sizes[i+1]) / 
-                torch.sqrt(torch.tensor(4))
+            torch.empty(self.layer_sizes[i], self.layer_sizes[i+1]).uniform_(-1 / torch.sqrt(torch.tensor(self.layer_sizes[i], dtype=torch.float32)), 
+                                             1 / torch.sqrt(torch.tensor(self.layer_sizes[i], dtype=torch.float32)))
             ) for i in range(len(self.layer_sizes)-1)
         ])
         
@@ -133,7 +133,7 @@ class EnergyBasedModel(nn.Module):
         
         # Initialize states with proper batch dimension if not done
         if self.states is None or self.states[0].shape[0] != batch_size:
-            self.states = [torch.ones(batch_size, size, device=input.device) for size in self.layer_sizes]
+            self.states = [torch.rand(batch_size, size, device=input.device) for size in self.layer_sizes]
             if hasattr(self, 'debug') and self.debug:
                 print(f"[DEBUG] Initialized states with batch size: {batch_size}")
                 for i, state in enumerate(self.states):
@@ -239,6 +239,23 @@ class EnergyBasedModel(nn.Module):
                     print(f"\n[DEBUG] Energy after iteration {step+1}: {self.energy(self.states, input, targets=target).item():.4f}")
                         
         return [s.clone() for s in self.states]
+    
+    def train(self):
+        """
+        Set the model to training mode.
+        """
+        self.training_mode = True
+        if hasattr(self, 'debug') and self.debug:
+            print("\n[DEBUG] Model set to training mode")
+        return self
+    def eval(self):
+        """
+        Set the model to evaluation mode.
+        """
+        self.training_mode = False
+        if hasattr(self, 'debug') and self.debug:
+            print("\n[DEBUG] Model set to evaluation mode")
+        return self
 
     def forward(self, input, target=None, beta=0):
         if self.training_mode:
