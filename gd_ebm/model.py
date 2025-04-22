@@ -71,7 +71,7 @@ class EnergyBasedModel(nn.Module):
 
         return weights_gradients, biases_gradients
 
-    def energy(self, states, inputs, targets=None):
+    def energy(self, input=None,hidden=None, targets=None, batch_size=None):
         """
         Compute the total energy of the network.
         
@@ -84,7 +84,18 @@ class EnergyBasedModel(nn.Module):
             torch.Tensor: Total energy of the network averaged over batch
         """
         energy = 0.0
+        states = [torch.rand(size, device=input.device) for size in self.layer_sizes]
+        if input is not None:
+            self.states[0] = input
         
+        if hidden is not None:
+            for i in range(1, len(self.layer_sizes)-1):
+                self.states[i] = hidden[i-1]
+
+        if targets is not None:
+            self.states[-1] = targets
+
+
         
         # Calculate the energy according to the new formulation
         # squared_norm: for each layer, sum of squares of each row, then sum over layers.
@@ -100,16 +111,6 @@ class EnergyBasedModel(nn.Module):
         ])
 
         energy = squared_norm + linear_terms + quadratic_terms
-
-        # Add supervised cost if targets are provided
-        # if targets is not None:
-        #     target = nn.functional.one_hot(targets, num_classes=states[-1].shape[1])
-        #     target = target.float()
-        #     target_energy = self.beta * 0.5 * torch.sum((states[-1] - target) ** 2, dim=1)
-        #     energy += target_energy
-            
-        # Take the mean over batch to get a scalar value
-        energy = torch.mean(energy)
             
         return energy
     
