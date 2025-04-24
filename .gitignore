@@ -14,3 +14,7 @@ __pycache__/
 
 # Jupyter Notebook Checkpoints
 .ipynb_checkpoints/ 
+ebm_env/
+forward_data.h5
+backward_data.h5
+gd_ebm/mnist_cache/
