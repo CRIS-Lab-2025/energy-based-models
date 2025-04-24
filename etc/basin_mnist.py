@@ -198,7 +198,7 @@ with h5py.File('backward_data.h5', 'w') as f:
 
 
 # Now for both hidden_states and hidden_states_backward, do uMAP and reduce to 2D. Then plot the 2D scatter plot of the two with the labels
-import umap_basin
+import etc.umap_basin as umap_basin
 
 # Load data from HDF5 files
 with h5py.File('forward_data.h5', 'r') as f_forward, h5py.File('backward_data.h5', 'r') as f_backward:
