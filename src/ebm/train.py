@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from tqdm import tqdm
-from ebm.dataset import get_dataset
+from ebm.dataset import valid_datasets, Dataset
 from ebm.model import EnergyBasedModel
 import matplotlib.pyplot as plt
 from ebm.util.model_extract import extract_hidden_representations, save_to_hdf5
@@ -190,8 +190,9 @@ def train_ebm(model, train_loader, val_loader=None, test_loader=None, epochs=10,
 
 
 def train(config, debug=False):
-    dataset = config.get('dataset', '3d-circles')
-    train_loader, test_loader = get_dataset(dataset)
+    dataset_type= config.get('dataset', '3d-circles')
+    dataset: Dataset = valid_datasets[dataset_type]()
+    train_loader, test_loader = dataset.get_data_loaders()
     model = EnergyBasedModel(
         input_size=config['input_size'],
         hidden_sizes=config['hidden_sizes'],

@@ -6,22 +6,6 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 
-def get_dataset(dataset):
-    """
-    Get the dataset based on the input string.
-    """
-    if dataset == "3d-circles":
-        train_loader, test_loader = CirclesDataset3D().get_data_loaders()
-        return train_loader, test_loader
-    elif dataset == "mnist":
-        train_loader, test_loader = MNISTDataset().get_data_loaders()
-        return train_loader, test_loader
-    elif dataset == "xor":
-        train_loader, test_loader = XORDataset().get_data_loaders()
-        return train_loader, test_loader
-    else:
-        raise ValueError(f"Unknown dataset: {dataset}")
-
 class Dataset(ABC):
     def __init__(self, test_size, batch_size, random_state):
         self.batch_size = batch_size
@@ -192,3 +176,9 @@ class XORDataset(Dataset):
         plt.legend()
         plt.grid(True)
         plt.show()
+        
+valid_datasets = {
+    "3d-circles": CirclesDataset3D,
+    "mnist": MNISTDataset,
+    "xor": XORDataset,
+}
