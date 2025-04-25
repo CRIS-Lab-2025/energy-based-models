@@ -67,7 +67,7 @@ class EnergyBasedModel(nn.Module):
             weights_gradients.append(weight_grad)
             
             bias_grad = (second_states[i+1] - first_states[i+1]).mean(dim=0)
-            biases_gradients.append(bias_grad.div_(self.beta))
+            biases_gradients.append(bias_grad)#.div_(self.beta))
 
         return weights_gradients, biases_gradients
 
