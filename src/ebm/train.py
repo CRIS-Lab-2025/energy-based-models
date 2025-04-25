@@ -6,11 +6,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from tqdm import tqdm
 from ebm.dataset import get_dataset
 from ebm.model import EnergyBasedModel
+import matplotlib.pyplot as plt
 from ebm.util.model_extract import extract_hidden_representations, save_to_hdf5
 
 
 def train_ebm(model, train_loader, val_loader=None, test_loader=None, epochs=10, 
-              scheduler_type=None, patience=5, early_stopping=False, debug=False):
+              scheduler_type=None, patience=5, early_stopping=False, debug=False, verbose=True):
     """
     Train an Energy-Based Model using equilibrium propagation.
     
@@ -58,16 +59,20 @@ def train_ebm(model, train_loader, val_loader=None, test_loader=None, epochs=10,
     best_model_state = None
     no_improve_count = 0
 
+    
     # Training loop
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc='Training Epoch', disable=verbose):
         epoch_start_time = time.time()
         
         # Training phase
         model.train()
         train_preds = []
         train_targets = []
+
         
-        for batch_idx, batch_data in enumerate(tqdm(train_loader, desc=f'Epoch {epoch+1}')):
+        # Progress bar depends on verbose setting
+        train_iter = tqdm(train_loader, desc=f'Epoch {epoch+1}') if verbose else train_loader
+        for batch_idx, batch_data in enumerate(train_iter):
             # Handle different formats of data
             if len(batch_data) == 2:
                 data, target = batch_data
@@ -97,7 +102,8 @@ def train_ebm(model, train_loader, val_loader=None, test_loader=None, epochs=10,
             epoch_time = time.time() - epoch_start_time
             history['time_per_epoch'].append(epoch_time)
             
-            print(f'Epoch {epoch+1}/{epochs} | '
+            if val_loader is None and verbose:
+                print(f'Epoch {epoch+1}/{epochs} | '
                   f'Train Acc: {train_acc:.4f} | '
                   f'LR: {current_lr:.6f} | Time: {epoch_time:.2f}s')
         
@@ -123,8 +129,12 @@ def train_ebm(model, train_loader, val_loader=None, test_loader=None, epochs=10,
                 val_acc = (val_preds == val_targets).float().mean().item()
                 history['val_accuracy'].append(val_acc)
                 
-                print(f'Val Acc: {val_acc:.4f}')
-                
+                if verbose:
+                    print(f'Epoch {epoch+1}/{epochs} | '
+                        f'Train Acc: {train_acc:.4f} | '
+                        f'Val Acc: {val_acc:.4f} | '
+                        f'LR: {current_lr:.6f} | Time: {epoch_time:.2f}s')
+                    
                 # Update scheduler
                 if scheduler is not None and scheduler_type == 'plateau':
                     scheduler.step(1 - val_acc)  # Use negative accuracy as loss
@@ -198,14 +208,36 @@ def train(config, debug=False):
     history, model = train_ebm(
         model, 
         train_loader, 
-        test_loader=test_loader,  # Use test loader as validation for simplicity
+        test_loader,  # Use test loader as validation for simplicity
         epochs=config.get('epochs', 10),
         scheduler_type=config.get('scheduler_type', None),
         patience=config.get('patience', 5),
         early_stopping=config.get('early_stopping', False),
-        debug=debug
+        debug=debug,
+        verbose=config.get('verbose', True)
     )
+    
+    # Check if we have validation data
+    has_val = len(history['val_accuracy']) > 0
+    
+    plt.figure(figsize=(10, 6))
+    plt.plot(history['train_accuracy'], label='Training Accuracy')
+    if has_val:
+        plt.plot(history['val_accuracy'], label='Validation Accuracy')
+    
+    plt.title('Model Accuracy over Epochs')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+    
+    # Save the plot
+    plt.savefig(f"accuracy_plot_{config.get('dataset')}.png")
+    plt.show()
     return model, history
+
+
 
 if __name__ == "__main__":
     config = {
