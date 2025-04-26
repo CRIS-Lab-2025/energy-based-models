@@ -137,9 +137,12 @@ class EnergyBasedModel(nn.Module):
         # Calculate the pi function for x
         return torch.clamp(x, min=0, max=1)
     
-    def negative(self, input, target=None, beta=0):
+    def negative(self, input, target=None, beta=0, n_steps=None, step_size=None):
         batch_size = input.shape[0]
-        
+        if n_steps is None:
+            n_steps = self.n_steps
+        if step_size is None:
+            step_size = self.step_size
         # Initialize states with proper batch dimension if not done
         if self.states is None or self.states[0].shape[0] != batch_size:
             self.states = [torch.rand(batch_size, size, device=input.device) for size in self.layer_sizes]
@@ -150,7 +153,7 @@ class EnergyBasedModel(nn.Module):
 
         with torch.inference_mode(): 
             # Fixed point iterations
-            for step in range(self.n_steps):
+            for step in range(n_steps):
                 
                 # Update hidden layers
                 for i in range(1, len(self.layer_sizes)-1):
@@ -169,7 +172,7 @@ class EnergyBasedModel(nn.Module):
                         print(f"  Gradient = σ'(s_{i}) * [feedforward + feedback + bias] - s_{i} = {grad[0, :5].detach().cpu().numpy()}")
                     
                     # Update state
-                    self.states[i].add_(self.step_size * grad)   
+                    self.states[i].add_(step_size * grad)   
                     # Do batch normalization on state
                     # self.states[i] = self.states[i] - self.states[i].mean(dim=0, keepdim=True)
                     # self.states[i] = self.states[i] / (self.states[i].std(dim=0, keepdim=True) + 1e-8)
@@ -188,6 +191,7 @@ class EnergyBasedModel(nn.Module):
 
                 # Update last state
                 self.states[-1] = self.states[-1] + self.step_size * grad
+                self.states = [self.pi(s) for s in self.states]
                         
         return [s.clone() for s in self.states]
     
@@ -230,5 +234,5 @@ class EnergyBasedModel(nn.Module):
         else:
             if hasattr(self, 'debug') and self.debug:
                 print("\n[DEBUG] Forward pass in evaluation mode")
-            states = self.negative(input)
+            states = self.negative(input,n_steps=10, step_size=0.01)
             return states[-1]
