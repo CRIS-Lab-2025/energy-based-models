@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_openml
@@ -28,10 +29,11 @@ def load_mnist():
     return (X[:60000], y_1hot[:60000], y[:60000]), (X[60000:], y_1hot[60000:], y[60000:])
 
 # --- Core EBM Class ---
-class EnergyBasedModel:
+class EnergyBasedModel(nn.Module):
     def __init__(self, model=[784,32,32,10], dt=0.2, beta=0.5, device=device,
                  epochs=10, batch_size=1024, subset_size=10000, lr=0.01,
                  n_free=50, n_nudge=10):
+        #self = torch.compile(self, mode="reduce-overhead")
         self.input_dim = input_dim = model[0]
         self.hidden_dim = hidden_dim = model[1]
         self.output_dim = output_dim = model[2]
@@ -275,7 +277,7 @@ class EnergyBasedModel:
 
             # Update
             # Print mean of dW  for each layer
-            print(s_nudge.mean(dim=0))
+           # print(s_nudge.mean(dim=0))
             for j in range(self.n_layers-1):
                 W[j] += self.lr_ih * dW[j] / (self.subset_size // self.batch_size)
             b[idx_s] += self.lr_b * db / (self.subset_size // self.batch_size)
